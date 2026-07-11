@@ -30,26 +30,26 @@ export function AuthScreen() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
       <form
         onSubmit={submit}
-        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="mb-6">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600 text-base font-bold text-white">
             C
           </div>
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
             {mode === "signin" ? "Sign in to Chiron" : "Create your Chiron account"}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Use your account to save your profile, registrations, and event
             publishing work.
           </p>
         </div>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">
+          <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
             Email
           </span>
           <input
@@ -63,7 +63,7 @@ export function AuthScreen() {
         </label>
 
         <label className="mt-4 block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">
+          <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
             Password
           </span>
           <input
@@ -114,4 +114,4 @@ export function AuthScreen() {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500";
