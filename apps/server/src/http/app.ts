@@ -12,14 +12,25 @@ import {
   type ChatRole,
   type EventCategory,
   type EventInput,
+  type EventRegistrationFormSchema,
+  type EventRegistrationInput,
+  type JsonObject,
 } from "@chiron/shared";
 import { env, currentMode as mode } from "../config";
 import { logVerbose } from "../log";
 import { runAgent } from "../agent/orchestrator";
-import { createEvent, upcomingEvents } from "../data/events";
+import { createEvent, getEvent, upcomingEvents } from "../data/events";
+import {
+  defaultRegistrationFormSchema,
+  getEventRegistrationForm,
+  sanitizeRegistrationFormSchema,
+  upsertEventRegistrationForm,
+} from "../data/event-registration-forms";
+import { upsertEventRegistration } from "../data/event-registrations";
 import { getProfile, upsertProfile } from "../data/profiles";
 import { tagEvent } from "../pipeline/tag-event";
 import { uploadEventImage } from "../data/storage";
+import { requireAuth, type AuthVariables } from "./auth";
 import { vapiAuth } from "../vapi/auth";
 import { handleChatCompletions } from "../vapi/adapter";
 
@@ -27,8 +38,8 @@ import { handleChatCompletions } from "../vapi/adapter";
 // agent + the events store over HTTP, consumed by every frontend (web app,
 // voice agent, WhatsApp bot). Deployed on its own behind Cloudflare.
 
-export function createApp(): Hono {
-  const app = new Hono();
+export function createApp(): Hono<{ Variables: AuthVariables }> {
+  const app = new Hono<{ Variables: AuthVariables }>();
 
   app.use("*", async (c, next) => {
     const started = Date.now();
@@ -66,7 +77,7 @@ export function createApp(): Hono {
   }
 
   // POST /api/chat  { channel, messages }  ->  AgentResult
-  app.post("/api/chat", async (c) => {
+  app.post("/api/chat", requireAuth, async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -122,7 +133,7 @@ export function createApp(): Hono {
   });
 
   // POST /api/events -> create an event (nonprofit form submit)
-  app.post("/api/events", async (c) => {
+  app.post("/api/events", requireAuth, async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -148,9 +159,128 @@ export function createApp(): Hono {
     }
   });
 
+  // GET /api/events/:id/registration-form -> JSONB event-specific form schema.
+  app.get("/api/events/:id/registration-form", async (c) => {
+    const eventId = c.req.param("id");
+    if (!eventId || !isUuid(eventId)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    try {
+      const event = await getEvent(eventId);
+      if (!event) return c.json({ error: "Event not found." }, 404);
+
+      const form = await getEventRegistrationForm(eventId);
+      return c.json({
+        form: form ?? {
+          id: null,
+          event_id: eventId,
+          schema: defaultRegistrationFormSchema(),
+          created_at: null,
+          updated_at: null,
+        },
+        required_fields: ["attendee_name", "contact_email"],
+        stripe_stub: {
+          enabled: false,
+          endpoint: `/api/event-registrations/{registration_id}/checkout`,
+        },
+      });
+    } catch (err) {
+      console.error("[/api/events/:id/registration-form GET] error:", err);
+      return c.json({ error: "Failed to load registration form." }, 500);
+    }
+  });
+
+  // POST /api/events/:id/registration-form -> upsert JSONB form schema.
+  app.post("/api/events/:id/registration-form", requireAuth, async (c) => {
+    const eventId = c.req.param("id");
+    if (!eventId || !isUuid(eventId)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+
+    try {
+      const event = await getEvent(eventId);
+      if (!event) return c.json({ error: "Event not found." }, 404);
+
+      const b = (body ?? {}) as Record<string, unknown>;
+      const form = await upsertEventRegistrationForm({
+        event_id: eventId,
+        schema: sanitizeRegistrationFormSchema(b.schema),
+      });
+      return c.json({ form }, 201);
+    } catch (err) {
+      console.error("[/api/events/:id/registration-form POST] error:", err);
+      return c.json({ error: "Failed to save registration form." }, 500);
+    }
+  });
+
+  // POST /api/event-registrations -> save a user's generated registration form.
+  app.post("/api/event-registrations", requireAuth, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+
+    const parsed = validateEventRegistration(body);
+    if ("error" in parsed) {
+      return c.json({ error: parsed.error }, 400);
+    }
+    if (parsed.input.profile_id !== c.get("authUser").id) {
+      return c.json({ error: "Cannot save another user's registration." }, 403);
+    }
+
+    try {
+      const [event, profile, form] = await Promise.all([
+        getEvent(parsed.input.event_id),
+        getProfile(parsed.input.profile_id),
+        getEventRegistrationForm(parsed.input.event_id),
+      ]);
+      if (!event) return c.json({ error: "Event not found." }, 404);
+      if (!profile) return c.json({ error: "Profile not found." }, 404);
+
+      const schema = form?.schema ?? defaultRegistrationFormSchema();
+      const responseError = validateRegistrationResponses(parsed.input, schema);
+      if (responseError) return c.json({ error: responseError }, 400);
+
+      const registration = await upsertEventRegistration({
+        ...parsed.input,
+        registration_form_id: form?.id ?? null,
+      });
+      return c.json({ registration }, 201);
+    } catch (err) {
+      console.error("[/api/event-registrations POST] error:", err);
+      return c.json({ error: "Failed to save registration." }, 500);
+    }
+  });
+
+  // Stub for a future Stripe Checkout integration.
+  app.post("/api/event-registrations/:id/checkout", requireAuth, (c) => {
+    const registrationId = c.req.param("id");
+    if (!registrationId || !isUuid(registrationId)) {
+      return c.json({ error: "A valid registration id is required." }, 400);
+    }
+    return c.json(
+      {
+        error: "Stripe checkout is not implemented yet.",
+        registration_id: registrationId,
+        stripe_stub: true,
+      },
+      501,
+    );
+  });
+
   // POST /api/upload -> store an event image in the public bucket.
   // multipart/form-data with a single "file" field; returns { url }.
-  app.post("/api/upload", async (c) => {
+  app.post("/api/upload", requireAuth, async (c) => {
     let file: File | null = null;
     try {
       const form = await c.req.formData();
@@ -183,10 +313,13 @@ export function createApp(): Hono {
   });
 
   // GET /api/profile?id=... -> the stored onboarding profile (or 404)
-  app.get("/api/profile", async (c) => {
+  app.get("/api/profile", requireAuth, async (c) => {
     const id = c.req.query("id");
     if (!id || !isUuid(id)) {
       return c.json({ error: "A profile id is required." }, 400);
+    }
+    if (id !== c.get("authUser").id) {
+      return c.json({ error: "Cannot load another user's profile." }, 403);
     }
     try {
       const profile = await getProfile(id);
@@ -200,7 +333,7 @@ export function createApp(): Hono {
 
   // POST /api/profile  { id, answers: {question_id: boolean}, city? }
   // Derives preferences + ui_mode from the quiz answers and upserts the profile.
-  app.post("/api/profile", async (c) => {
+  app.post("/api/profile", requireAuth, async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -215,6 +348,9 @@ export function createApp(): Hono {
         { error: "id must be a UUID (client-generated for now)." },
         400,
       );
+    }
+    if (id !== c.get("authUser").id) {
+      return c.json({ error: "Cannot save another user's profile." }, 403);
     }
 
     const answers = sanitizeAnswers(b.answers);
@@ -324,6 +460,73 @@ function validateEvent(
   };
 
   return { input };
+}
+
+function validateEventRegistration(
+  body: unknown,
+): { input: EventRegistrationInput } | { error: string } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const eventId = asString(b.event_id);
+  const profileId = asString(b.profile_id);
+
+  if (!eventId || !isUuid(eventId)) {
+    return { error: "event_id must be a valid UUID." };
+  }
+  if (!profileId || !isUuid(profileId)) {
+    return { error: "profile_id must be a valid UUID." };
+  }
+
+  const status = b.status === "registered" ? "registered" : "interested";
+
+  return {
+    input: {
+      event_id: eventId,
+      profile_id: profileId,
+      registration_form_id: isUuid(asString(b.registration_form_id) ?? "")
+        ? asString(b.registration_form_id)!
+        : null,
+      status,
+      attendee_name: asString(b.attendee_name) ?? null,
+      contact_email: asString(b.contact_email) ?? null,
+      contact_phone: asString(b.contact_phone) ?? null,
+      accessibility_requests: asString(b.accessibility_requests) ?? null,
+      notes: asString(b.notes) ?? null,
+      form_response: asJsonObject(b.form_response),
+      event_snapshot:
+        typeof b.event_snapshot === "object" && b.event_snapshot !== null
+          ? (b.event_snapshot as EventRegistrationInput["event_snapshot"])
+          : null,
+    },
+  };
+}
+
+function validateRegistrationResponses(
+  input: EventRegistrationInput,
+  schema: EventRegistrationFormSchema,
+): string | null {
+  if (input.status !== "registered") return null;
+  if (!input.attendee_name) return "A name is required.";
+  if (!input.contact_email) return "An email is required.";
+
+  const responses = input.form_response ?? {};
+  for (const field of schema.fields) {
+    if (!field.required) continue;
+    const value = responses[field.id];
+    if (field.type === "checkbox") {
+      if (value !== true) return `${field.label} is required.`;
+      continue;
+    }
+    if (typeof value !== "string" || !value.trim()) {
+      return `${field.label} is required.`;
+    }
+  }
+
+  return null;
+}
+
+function asJsonObject(v: unknown): JsonObject {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return {};
+  return v as JsonObject;
 }
 
 function asString(v: unknown): string | undefined {

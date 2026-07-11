@@ -10,6 +10,7 @@ import {
 } from "@chiron/shared";
 import { toDatetimeLocal } from "@/lib/format";
 import { apiUrl } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 // The event-creation "page" surfaced inline in chat, prefilled from the agent's
 // draft. The nonprofit reviews, edits, and submits — keeping a human in control
@@ -68,6 +69,7 @@ export function EventCreateForm({
   draft: EventDraft;
   onCreated: (event: PublicEvent) => void;
 }) {
+  const { authFetch } = useAuth();
   const [form, setForm] = useState<FormState>(() => fromDraft(draft));
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle",
@@ -87,7 +89,7 @@ export function EventCreateForm({
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch(apiUrl("/api/upload"), { method: "POST", body });
+      const res = await authFetch(apiUrl("/api/upload"), { method: "POST", body });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data?.error);
       setImageUrl(data.url as string);
@@ -117,7 +119,7 @@ export function EventCreateForm({
     };
 
     try {
-      const res = await fetch(apiUrl("/api/events"), {
+      const res = await authFetch(apiUrl("/api/events"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

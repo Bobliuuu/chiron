@@ -15,10 +15,12 @@ export interface UiMessage {
 export function ChatMessageView({
   message,
   onEventCreated,
+  profileId,
   uiMode = "elaborate",
 }: {
   message: UiMessage;
   onEventCreated: (event: PublicEvent) => void;
+  profileId?: string | null;
   uiMode?: UiMode;
 }) {
   const isUser = message.role === "user";
@@ -49,6 +51,7 @@ export function ChatMessageView({
                 key={i}
                 action={action}
                 onEventCreated={onEventCreated}
+                profileId={profileId}
                 uiMode={uiMode}
               />
             ))}
@@ -62,10 +65,12 @@ export function ChatMessageView({
 function ActionView({
   action,
   onEventCreated,
+  profileId,
   uiMode,
 }: {
   action: UiAction;
   onEventCreated: (event: PublicEvent) => void;
+  profileId?: string | null;
   uiMode: UiMode;
 }) {
   if (action.type === "events") {
@@ -79,7 +84,12 @@ function ActionView({
         </p>
         <div className={grid}>
           {action.events.map((e) => (
-            <EventCard key={e.id} event={e} uiMode={uiMode} />
+            <EventCard
+              key={e.id}
+              event={e}
+              profileId={profileId}
+              uiMode={uiMode}
+            />
           ))}
         </div>
       </div>

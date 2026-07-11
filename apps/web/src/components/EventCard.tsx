@@ -1,23 +1,32 @@
+"use client";
+
+import { useState } from "react";
 import {
   CATEGORY_LABELS,
   type PublicEvent,
   type UiMode,
 } from "@chiron/shared";
 import { formatDateTime } from "@/lib/format";
+import { EventRegistrationForm } from "@/components/EventRegistrationForm";
 
 export function EventCard({
   event,
   uiMode = "elaborate",
+  profileId,
 }: {
   event: PublicEvent;
   uiMode?: UiMode;
+  profileId?: string | null;
 }) {
+  const [showRegistration, setShowRegistration] = useState(false);
   const where = event.is_online
     ? "Online"
     : [event.location_name, event.city].filter(Boolean).join(", ") || "Location TBD";
 
   if (uiMode === "quick") {
-    return <QuickEventCard event={event} where={where} />;
+    return (
+      <QuickEventCard event={event} where={where} profileId={profileId} />
+    );
   }
 
   return (
@@ -88,7 +97,7 @@ export function EventCard({
               rel="noreferrer"
               className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
             >
-              Register →
+              External signup →
             </a>
           ) : (
             <span className="text-slate-600">
@@ -96,6 +105,26 @@ export function EventCard({
             </span>
           )}
         </div>
+      )}
+
+      <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+        <button
+          type="button"
+          onClick={() => setShowRegistration((v) => !v)}
+          disabled={!profileId}
+          className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {showRegistration ? "Hide form" : "Register"}
+        </button>
+        {!profileId && (
+          <span className="text-xs text-slate-500">
+            Finish the quick profile first.
+          </span>
+        )}
+      </div>
+
+      {showRegistration && profileId && (
+        <EventRegistrationForm event={event} profileId={profileId} />
       )}
     </article>
   );
@@ -108,10 +137,14 @@ export function EventCard({
 function QuickEventCard({
   event,
   where,
+  profileId,
 }: {
   event: PublicEvent;
   where: string;
+  profileId?: string | null;
 }) {
+  const [showRegistration, setShowRegistration] = useState(false);
+
   return (
     <article className="overflow-hidden rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm">
       {event.image_url && (
@@ -151,8 +184,26 @@ function QuickEventCard({
           rel="noreferrer"
           className="mt-5 inline-block rounded-xl bg-brand-600 px-6 py-3 text-lg font-semibold text-white hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-300"
         >
-          Sign up
+          External signup
         </a>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShowRegistration((v) => !v)}
+        disabled={!profileId}
+        className="mt-4 block rounded-xl bg-brand-600 px-6 py-3 text-lg font-semibold text-white hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-300 disabled:cursor-not-allowed disabled:bg-slate-300"
+      >
+        {showRegistration ? "Hide form" : "Register"}
+      </button>
+      {!profileId && (
+        <p className="mt-2 text-base text-slate-500">
+          Finish the quick profile first.
+        </p>
+      )}
+
+      {showRegistration && profileId && (
+        <EventRegistrationForm event={event} profileId={profileId} />
       )}
     </article>
   );

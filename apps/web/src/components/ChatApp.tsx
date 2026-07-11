@@ -7,8 +7,7 @@ import { Composer } from "@/components/Composer";
 import { EventsPanel } from "@/components/EventsPanel";
 import { OnboardingQuiz } from "@/components/OnboardingQuiz";
 import { apiUrl, API_URL, CHANNEL, logApi } from "@/lib/api";
-
-const PROFILE_STORAGE_KEY = "chiron_profile";
+import { useAuth } from "@/lib/auth";
 
 const SUGGESTIONS = [
   "Find all events in Markham for food banks",
@@ -35,6 +34,7 @@ const QUICK_GREETING: UiMessage = {
 };
 
 export function ChatApp() {
+  const { authFetch, signOut, user } = useAuth();
   const [messages, setMessages] = useState<UiMessage[]>([GREETING]);
   const [sending, setSending] = useState(false);
   const [events, setEvents] = useState<PublicEvent[]>([]);
@@ -54,30 +54,37 @@ export function ChatApp() {
     logApi("API_URL =", API_URL);
     void probeBackend();
     void refreshEvents();
-    try {
-      const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Profile;
-        setProfile(parsed);
-        if (parsed.ui_mode === "quick") setMessages([QUICK_GREETING]);
-        setNeedsQuiz(false);
-      } else {
+
+    async function loadProfile() {
+      if (!user?.id) return;
+      try {
+        const res = await authFetch(apiUrl(`/api/profile?id=${user.id}`));
+        if (res.status === 404) {
+          setProfile(null);
+          setNeedsQuiz(true);
+          return;
+        }
+        const data = await res.json();
+        if (res.ok && data.profile) {
+          const loadedProfile = data.profile as Profile;
+          setProfile(loadedProfile);
+          if (loadedProfile.ui_mode === "quick") setMessages([QUICK_GREETING]);
+          setNeedsQuiz(false);
+          return;
+        }
+        setNeedsQuiz(true);
+      } catch {
         setNeedsQuiz(true);
       }
-    } catch {
-      setNeedsQuiz(true);
     }
-  }, []);
+
+    void loadProfile();
+  }, [authFetch, user?.id]);
 
   function handleQuizDone(newProfile: Profile | null) {
     setNeedsQuiz(false);
     if (!newProfile) return; // skipped — stay in elaborate mode, ask again next visit
     setProfile(newProfile);
-    try {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(newProfile));
-    } catch {
-      // Private browsing etc. — the profile just won't persist.
-    }
     if (newProfile.ui_mode === "quick") setMessages([QUICK_GREETING]);
   }
 
@@ -147,7 +154,7 @@ export function ChatApp() {
     });
 
     try {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,14 +240,23 @@ export function ChatApp() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
               C
             </div>
-            <div>
+          <div>
               <h1 className="text-sm font-semibold text-slate-900">Chiron</h1>
               <p className="text-[11px] text-slate-400">
                 Community event assistant
               </p>
             </div>
           </div>
-          {mode && <ModeBadge mode={mode} />}
+          <div className="flex items-center gap-3">
+            {mode && <ModeBadge mode={mode} />}
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </div>
         </header>
 
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
@@ -250,6 +266,7 @@ export function ChatApp() {
                 key={m.id}
                 message={m}
                 onEventCreated={handleEventCreated}
+                profileId={profile?.id ?? null}
                 uiMode={uiMode}
               />
             ))}
@@ -283,7 +300,11 @@ export function ChatApp() {
 
       {/* Results / calendar column */}
       <div className="hidden lg:block">
-        <EventsPanel events={events} loading={eventsLoading} />
+        <EventsPanel
+          events={events}
+          loading={eventsLoading}
+          profileId={profile?.id ?? null}
+        />
       </div>
     </div>
   );

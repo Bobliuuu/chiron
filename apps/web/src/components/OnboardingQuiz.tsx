@@ -4,6 +4,7 @@ import { useState } from "react";
 import { QUIZ_QUESTIONS } from "@chiron/shared";
 import type { Profile } from "@chiron/shared";
 import { apiUrl } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 // The onboarding quiz: one yes/no question per screen with two big buttons.
 // Deliberately already in "quick" form — we don't yet know which presentation
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function OnboardingQuiz({ onDone }: Props) {
+  const { authFetch, user } = useAuth();
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -36,11 +38,11 @@ export function OnboardingQuiz({ onDone }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const id = crypto.randomUUID();
-      const res = await fetch(apiUrl("/api/profile"), {
+      if (!user?.id) throw new Error("Missing signed-in user.");
+      const res = await authFetch(apiUrl("/api/profile"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, answers: finalAnswers }),
+        body: JSON.stringify({ id: user.id, answers: finalAnswers }),
       });
       const data = await res.json();
       if (!res.ok || !data.profile) {

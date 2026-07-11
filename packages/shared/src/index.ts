@@ -6,5 +6,6 @@
 export * from "./events";
 export * from "./agent";
 export * from "./profile";
+export * from "./registrations";
 export * from "./quiz";
 export * from "./tags";

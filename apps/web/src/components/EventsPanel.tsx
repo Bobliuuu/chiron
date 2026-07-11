@@ -11,9 +11,11 @@ import { formatDate } from "@/lib/format";
 export function EventsPanel({
   events,
   loading,
+  profileId,
 }: {
   events: PublicEvent[];
   loading: boolean;
+  profileId?: string | null;
 }) {
   const groups = useMemo(() => groupByDay(events), [events]);
 
@@ -39,7 +41,7 @@ export function EventsPanel({
             <h3 className="mb-2 text-xs font-semibold text-slate-400">{day}</h3>
             <div className="space-y-3">
               {items.map((e) => (
-                <EventCard key={e.id} event={e} />
+                <EventCard key={e.id} event={e} profileId={profileId} />
               ))}
             </div>
           </section>

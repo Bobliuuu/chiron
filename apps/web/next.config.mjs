@@ -1,3 +1,12 @@
+import nextEnv from "@next/env";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const { loadEnvConfig } = nextEnv;
+const webRoot = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(webRoot, "../..");
+loadEnvConfig(repoRoot);
+
 /** @type {import('next').NextConfig} */
 const backendUrl =
   process.env.CHIRON_BACKEND_URL?.replace(/\/$/, "") ??
