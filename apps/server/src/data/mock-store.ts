@@ -204,4 +204,9 @@ export const mockStore = {
     store[idx] = { ...store[idx], ...patch, updated_at: new Date().toISOString() } as EventRecord;
     return store[idx];
   },
+  delete(id: string): void {
+    const idx = store.findIndex((e) => e.id === id);
+    if (idx === -1) throw new Error(`deleteEvent failed: ${id} not found`);
+    store.splice(idx, 1);
+  },
 };

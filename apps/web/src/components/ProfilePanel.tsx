@@ -116,6 +116,7 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
   const [events, setEvents] = useState<PublicEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -132,6 +133,22 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function removeEvent(event: PublicEvent) {
+    if (!window.confirm(`Delete “${event.title}”? This can't be undone.`)) return;
+    setDeletingId(event.id);
+    try {
+      const res = await authFetch(apiUrl(`/api/events/${event.id}`), {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setEvents((prev) => (prev ?? []).filter((e) => e.id !== event.id));
+        onEventsChanged();
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (events === null) return <Loading />;
@@ -170,12 +187,21 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
                   {event.city ? ` · ${event.city}` : ""}
                 </p>
               </div>
-              <button
-                onClick={() => setEditingId(event.id)}
-                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand-400 hover:text-brand-700"
-              >
-                Edit
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => setEditingId(event.id)}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand-400 hover:text-brand-700"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => void removeEvent(event)}
+                  disabled={deletingId === event.id}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           )}
         </li>

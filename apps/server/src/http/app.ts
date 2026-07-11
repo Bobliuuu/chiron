@@ -21,6 +21,7 @@ import { logVerbose } from "../log";
 import { runAgent } from "../agent/orchestrator";
 import {
   createEvent,
+  deleteEvent,
   eventsByCreator,
   getEvent,
   updateEvent,
@@ -348,6 +349,31 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
     } catch (err) {
       console.error("[/api/events PATCH] error:", err);
       return c.json({ error: "Failed to update event." }, 500);
+    }
+  });
+
+  // DELETE /api/events/:id -> owner deletes an event they created.
+  app.delete("/api/events/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    if (!id || !isUuid(id)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    try {
+      const existing = await getEvent(id);
+      if (!existing) return c.json({ error: "Event not found." }, 404);
+      if (existing.created_by !== c.get("authUser").id) {
+        return c.json(
+          { error: "You can only delete events you created." },
+          403,
+        );
+      }
+
+      await deleteEvent(id);
+      return c.json({ deleted: true });
+    } catch (err) {
+      console.error("[/api/events DELETE] error:", err);
+      return c.json({ error: "Failed to delete event." }, 500);
     }
   });
 

@@ -164,6 +164,14 @@ export async function getEvent(id: string): Promise<EventRecord | null> {
   return (data as EventRecord | null) ?? null;
 }
 
+export async function deleteEvent(id: string): Promise<void> {
+  const db = getSupabaseAdmin();
+  if (!db) return mockStore.delete(id);
+
+  const { error } = await db.from(TABLE).delete().eq("id", id);
+  if (error) throw new Error(`deleteEvent failed: ${error.message}`);
+}
+
 export async function createEvent(input: EventInput): Promise<EventRecord> {
   const db = getSupabaseAdmin();
   if (!db) return mockStore.create(input);
