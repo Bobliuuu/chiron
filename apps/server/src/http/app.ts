@@ -593,7 +593,12 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
       typeof b.city === "string" && b.city.trim() ? b.city.trim() : null;
 
     try {
-      const profile = await upsertProfile(deriveProfile(id, answers, city));
+      // Re-deriving from answers must not clobber standalone settings.
+      const existing = await getProfile(id);
+      const profile = await upsertProfile({
+        ...deriveProfile(id, answers, city),
+        share_in_analytics: existing?.share_in_analytics,
+      });
       return c.json({ profile }, 201);
     } catch (err) {
       console.error("[/api/profile POST] error:", err);
@@ -611,9 +616,13 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
       return c.json({ error: "Invalid JSON body." }, 400);
     }
     const b = (body ?? {}) as Record<string, unknown>;
-    if (typeof b.share_in_analytics !== "boolean") {
+    const patch: { share_in_analytics?: boolean; large_text?: boolean } = {};
+    if (typeof b.share_in_analytics === "boolean")
+      patch.share_in_analytics = b.share_in_analytics;
+    if (typeof b.large_text === "boolean") patch.large_text = b.large_text;
+    if (Object.keys(patch).length === 0) {
       return c.json(
-        { error: "Only the share_in_analytics flag can be patched." },
+        { error: "Only share_in_analytics / large_text can be patched." },
         400,
       );
     }
@@ -626,7 +635,7 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
       }
       const updated = await upsertProfile({
         ...existing,
-        share_in_analytics: b.share_in_analytics,
+        ...patch,
       });
       return c.json({ profile: updated });
     } catch (err) {

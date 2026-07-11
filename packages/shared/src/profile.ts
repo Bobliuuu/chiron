@@ -18,6 +18,8 @@ export interface Profile {
   preferred_tags: string[];
   city: string | null;
   free_only: boolean;
+  /** Scale up all text in the app (low-vision support). */
+  large_text: boolean;
   /** Raw quiz answers by question id, so prefs can be re-derived later. */
   quiz_answers: Record<string, boolean>;
   /**
@@ -37,6 +39,7 @@ export interface ProfileInput {
   preferred_tags: string[];
   city?: string | null;
   free_only: boolean;
+  large_text?: boolean;
   quiz_answers: Record<string, boolean>;
   share_in_analytics?: boolean;
 }

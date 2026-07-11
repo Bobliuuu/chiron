@@ -90,6 +90,14 @@ export function ChatApp() {
     if (newProfile.ui_mode === "quick") setMessages([QUICK_GREETING]);
   }
 
+  // Low-vision text scaling: rem-based sizes all follow the root font size.
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      "text-scale-lg",
+      profile?.large_text ?? false,
+    );
+  }, [profile?.large_text]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,

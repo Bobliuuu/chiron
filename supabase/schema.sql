@@ -145,6 +145,10 @@ create table public.profiles (
   city                text,
   free_only           boolean not null default false,
 
+  -- Scale up all text in the app (low-vision support). First quiz question;
+  -- editable later in Settings → Preferences.
+  large_text          boolean not null default false,
+
   -- Raw quiz answers ({question_id: boolean}) so preferences can be
   -- re-derived if the mapping changes, and edited in the Preferences tab.
   quiz_answers        jsonb   not null default '{}'::jsonb,

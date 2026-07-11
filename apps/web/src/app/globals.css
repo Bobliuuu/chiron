@@ -20,3 +20,10 @@ body {
 :where(a, button, input, textarea, select, [tabindex]):focus-visible {
   @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white;
 }
+
+/* Low-vision support: profiles.large_text scales every rem-based size (all
+   Tailwind text/spacing) by bumping the root font size. Toggled on <html> by
+   ChatApp/OnboardingQuiz. */
+html.text-scale-lg {
+  font-size: 122%;
+}

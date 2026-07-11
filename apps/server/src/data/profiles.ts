@@ -17,6 +17,7 @@ export async function upsertProfile(input: ProfileInput): Promise<Profile> {
       ...input,
       city: input.city ?? null,
       share_in_analytics: input.share_in_analytics ?? true,
+      large_text: input.large_text ?? false,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };
@@ -36,6 +37,7 @@ export async function upsertProfile(input: ProfileInput): Promise<Profile> {
         free_only: input.free_only,
         quiz_answers: input.quiz_answers,
         share_in_analytics: input.share_in_analytics ?? true,
+        large_text: input.large_text ?? false,
       },
       { onConflict: "id" },
     )

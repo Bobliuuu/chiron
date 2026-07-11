@@ -25,6 +25,9 @@ export function OnboardingQuiz({ onDone }: Props) {
   const total = QUIZ_QUESTIONS.length;
 
   async function answer(value: boolean) {
+    if (question.id === "large_text") {
+      document.documentElement.classList.toggle("text-scale-lg", value);
+    }
     const next = { ...answers, [question.id]: value };
     setAnswers(next);
     if (index + 1 < total) {

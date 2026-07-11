@@ -28,9 +28,17 @@ export interface QuizEffect {
   quick_signal?: boolean;
   /** Restrict recommendations to free events. */
   free_only?: boolean;
+  /** Scale up all text in the app (low-vision support). */
+  large_text?: boolean;
 }
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [
+  {
+    id: "large_text",
+    text: "Do you want bigger text?",
+    detail: "Makes all words larger and easier to read.",
+    onYes: { large_text: true, accessibility_needs: ["large_print"] },
+  },
   {
     id: "short_info",
     text: "Do you like short and simple information?",
@@ -81,6 +89,7 @@ export function deriveProfile(
   const needs = new Set<string>();
   let quickSignals = 0;
   let freeOnly = false;
+  let largeText = false;
 
   for (const q of QUIZ_QUESTIONS) {
     if (!answers[q.id]) continue;
@@ -88,6 +97,7 @@ export function deriveProfile(
     for (const t of q.onYes.accessibility_needs ?? []) needs.add(t);
     if (q.onYes.quick_signal) quickSignals++;
     if (q.onYes.free_only) freeOnly = true;
+    if (q.onYes.large_text) largeText = true;
   }
 
   const ui_mode: UiMode = quickSignals >= QUICK_THRESHOLD ? "quick" : "elaborate";
@@ -99,6 +109,7 @@ export function deriveProfile(
     preferred_tags: [...preferred],
     city: city ?? null,
     free_only: freeOnly,
+    large_text: largeText,
     quiz_answers: answers,
   };
 }
