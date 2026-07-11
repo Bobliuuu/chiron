@@ -1,6 +1,7 @@
 "use client";
 
-import type { EventRecord } from "@/lib/types/events";
+import type { PublicEvent } from "@/lib/types/events";
+import type { UiMode } from "@/lib/types/profile";
 import type { UiAction } from "@/lib/agent/types";
 import { EventCard } from "@/components/EventCard";
 import { EventCreateForm } from "@/components/EventCreateForm";
@@ -16,9 +17,11 @@ export interface UiMessage {
 export function ChatMessageView({
   message,
   onEventCreated,
+  uiMode = "elaborate",
 }: {
   message: UiMessage;
-  onEventCreated: (event: EventRecord) => void;
+  onEventCreated: (event: PublicEvent) => void;
+  uiMode?: UiMode;
 }) {
   const isUser = message.role === "user";
 
@@ -48,6 +51,7 @@ export function ChatMessageView({
                 key={i}
                 action={action}
                 onEventCreated={onEventCreated}
+                uiMode={uiMode}
               />
             ))}
           </div>
@@ -60,20 +64,24 @@ export function ChatMessageView({
 function ActionView({
   action,
   onEventCreated,
+  uiMode,
 }: {
   action: UiAction;
-  onEventCreated: (event: EventRecord) => void;
+  onEventCreated: (event: PublicEvent) => void;
+  uiMode: UiMode;
 }) {
   if (action.type === "events") {
     if (action.events.length === 0) return null;
+    // Quick mode: one card per row — one thing to look at at a time.
+    const grid = uiMode === "quick" ? "grid gap-4" : "grid gap-3 sm:grid-cols-2";
     return (
       <div className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {action.title}
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={grid}>
           {action.events.map((e) => (
-            <EventCard key={e.id} event={e} />
+            <EventCard key={e.id} event={e} uiMode={uiMode} />
           ))}
         </div>
       </div>

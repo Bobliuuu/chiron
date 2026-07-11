@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   UiAction,
 } from "@/lib/agent/types";
+import type { AgentProfile } from "@/lib/types/profile";
 
 const MAX_TOOL_ROUNDS = 4;
 
@@ -19,28 +20,32 @@ const MAX_TOOL_ROUNDS = 4;
  * model is configured OR when a live model call fails. All paths converge on
  * the same AgentResult contract.
  */
-export async function runAgent(history: ChatMessage[]): Promise<AgentResult> {
+export async function runAgent(
+  history: ChatMessage[],
+  profile?: AgentProfile | null,
+): Promise<AgentResult> {
   const llm = getLlmClient();
 
-  if (!llm) return mockResult(history);
+  if (!llm) return mockResult(history, profile);
 
   try {
-    return await runWithModel(llm, history);
+    return await runWithModel(llm, history, profile);
   } catch (err) {
     console.error(
       `[agent] ${llm.provider} model call failed — falling back to mock planner:`,
       err,
     );
-    return mockResult(history);
+    return mockResult(history, profile);
   }
 }
 
 async function runWithModel(
   llm: LlmClient,
   history: ChatMessage[],
+  profile?: AgentProfile | null,
 ): Promise<AgentResult> {
   const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt(new Date()) },
+    { role: "system", content: systemPrompt(new Date(), profile) },
     ...history.map(
       (m): ChatCompletionMessageParam => ({ role: m.role, content: m.content }),
     ),
@@ -106,7 +111,10 @@ async function runWithModel(
   };
 }
 
-async function mockResult(history: ChatMessage[]): Promise<AgentResult> {
-  const { message, actions } = await planWithoutLLM(history);
+async function mockResult(
+  history: ChatMessage[],
+  profile?: AgentProfile | null,
+): Promise<AgentResult> {
+  const { message, actions } = await planWithoutLLM(history, profile);
   return { message, actions, mode: { llm: "mock", db: dbMode() } };
 }

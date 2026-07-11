@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { mockStore } from "@/lib/supabase/mock-store";
+import { rankEvents, type RankingQuery } from "@/lib/ranking";
 import type {
   EventInput,
   EventRecord,
@@ -21,6 +22,8 @@ export async function searchEvents(
 
   let query = db.from(TABLE).select("*");
 
+  if (filters.tags && filters.tags.length > 0)
+    query = query.overlaps("tags", filters.tags);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.city) query = query.ilike("city", filters.city);
   if (typeof filters.isFree === "boolean")
@@ -64,6 +67,55 @@ export async function upcomingEvents(
 
   if (error) throw new Error(`upcomingEvents failed: ${error.message}`);
   return (data ?? []) as EventRecord[];
+}
+
+export interface TopEventsQuery {
+  /** Static vocabulary tags to match (primary signal). */
+  tags: string[];
+  k?: number;
+  city?: string;
+  from?: string;
+  to?: string;
+  /** Hard filter to free events only. */
+  freeOnly?: boolean;
+  /** Soft preference for free events (ranking bonus, not a filter). */
+  preferFree?: boolean;
+}
+
+const CANDIDATE_POOL = 100;
+
+/**
+ * Top-k retrieval for the recommendation tool. Fetches a broad, cheaply
+ * filtered candidate set from the active backend, then ranks it with the
+ * shared scorer (tag overlap + soonness + free preference). Tag matching is
+ * a soft signal: events without the requested tags still make the pool and
+ * simply rank lower, so the agent always has something to recommend.
+ */
+export async function topEvents(q: TopEventsQuery): Promise<EventRecord[]> {
+  const k = q.k ?? 10;
+  const ranking: RankingQuery = { tags: q.tags, preferFree: q.preferFree };
+
+  const baseFilters: EventSearchFilters = {
+    city: q.city,
+    from: q.from ?? new Date().toISOString(),
+    to: q.to,
+    isFree: q.freeOnly ? true : undefined,
+    limit: CANDIDATE_POOL,
+  };
+
+  // Prefer tag-matching candidates; pad with upcoming events when thin.
+  const tagged =
+    q.tags.length > 0
+      ? await searchEvents({ ...baseFilters, tags: q.tags })
+      : [];
+  let pool = tagged;
+  if (pool.length < k) {
+    const filler = await searchEvents(baseFilters);
+    const seen = new Set(pool.map((e) => e.id));
+    pool = [...pool, ...filler.filter((e) => !seen.has(e.id))];
+  }
+
+  return rankEvents(pool, ranking, k);
 }
 
 export async function getEvent(id: string): Promise<EventRecord | null> {

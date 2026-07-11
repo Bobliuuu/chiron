@@ -1,9 +1,12 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { searchEvents, upcomingEvents } from "@/lib/supabase/events";
+import { getEvent, searchEvents, topEvents } from "@/lib/supabase/events";
+import { STATIC_TAGS, sanitizeStaticTags } from "@/lib/tags";
 import {
   EVENT_CATEGORIES,
+  toPublicEvent,
   type EventCategory,
   type EventDraft,
+  type EventRecord,
 } from "@/lib/types/events";
 import type { UiAction } from "@/lib/agent/types";
 
@@ -24,13 +27,19 @@ export const toolDefinitions: ChatCompletionTool[] = [
     function: {
       name: "search_events",
       description:
-        "Find existing community events matching concrete filters. Use for queries like 'food bank events in Markham' or 'free things this weekend'.",
+        "Find existing community events matching concrete filters. Use for queries like 'food bank events in Markham' or 'free things this weekend'. Prefer the tags filter over free-text when the need maps onto the tag vocabulary.",
       parameters: {
         type: "object",
         properties: {
           query: {
             type: "string",
             description: "Free-text keywords (e.g. 'food bank', 'coding').",
+          },
+          tags: {
+            type: "array",
+            items: { type: "string", enum: STATIC_TAGS },
+            description:
+              "Static vocabulary tags; matches events having at least one.",
           },
           city: { type: "string", description: "City name, e.g. 'Markham'." },
           category: {
@@ -59,21 +68,54 @@ export const toolDefinitions: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "recommend_events",
+      name: "get_top_events",
       description:
-        "Recommend a small, curated set of upcoming events. Use when the user asks for suggestions or gives a profile/need rather than exact filters.",
+        "Retrieve the top-k upcoming events ranked by tag match + date proximity. Use when the user describes a need or asks for suggestions. Returns MORE candidates than you should show: review the results (including their tags) and present only the few that genuinely fit the user's full context.",
       parameters: {
         type: "object",
         properties: {
-          interests: {
-            type: "string",
-            description: "What the user is interested in, in their words.",
+          tags: {
+            type: "array",
+            items: { type: "string", enum: STATIC_TAGS },
+            description:
+              "Tags describing what the user wants — translate their words and profile into this vocabulary. The primary ranking signal.",
+          },
+          k: {
+            type: "number",
+            description: "How many candidates to retrieve (default 10).",
           },
           city: { type: "string" },
-          audience: { type: "string" },
-          is_free: { type: "boolean" },
-          limit: { type: "number", description: "Max recommendations (default 3)." },
+          from: { type: "string", description: "ISO date-time lower bound." },
+          to: { type: "string", description: "ISO date-time upper bound." },
+          free_only: {
+            type: "boolean",
+            description: "Hard-restrict to free events.",
+          },
         },
+        required: ["tags"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "show_events",
+      description:
+        "Render chosen events as cards for the user. Call after get_top_events with the ids of the few candidates (usually 3) that best fit, in the order to display.",
+      parameters: {
+        type: "object",
+        properties: {
+          ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "Event ids to display, best match first.",
+          },
+          title: {
+            type: "string",
+            description: "Short heading for the list, e.g. 'Picked for you'.",
+          },
+        },
+        required: ["ids"],
       },
     },
   },
@@ -124,8 +166,10 @@ export async function executeTool(
   switch (name) {
     case "search_events":
       return runSearch(args);
-    case "recommend_events":
-      return runRecommend(args);
+    case "get_top_events":
+      return runTopEvents(args);
+    case "show_events":
+      return runShowEvents(args);
     case "draft_event":
       return runDraft(args);
     default:
@@ -136,6 +180,7 @@ export async function executeTool(
 async function runSearch(args: Record<string, unknown>): Promise<ToolOutcome> {
   const events = await searchEvents({
     query: str(args.query),
+    tags: sanitizeStaticTags(args.tags),
     city: str(args.city),
     category: str(args.category) as EventCategory | undefined,
     from: str(args.from),
@@ -152,29 +197,32 @@ async function runSearch(args: Record<string, unknown>): Promise<ToolOutcome> {
       count: events.length,
       events: events.map(brief),
     }),
-    actions: [{ type: "events", title, events }],
+    actions: [{ type: "events", title, events: events.map(toPublicEvent) }],
   };
 }
 
-async function runRecommend(args: Record<string, unknown>): Promise<ToolOutcome> {
-  const limit = num(args.limit) ?? 3;
-  // Try to honor stated interests, but always fall back to upcoming events so
-  // the user never gets an empty recommendation.
-  let events = await searchEvents({
-    query: str(args.interests),
+async function runTopEvents(args: Record<string, unknown>): Promise<ToolOutcome> {
+  const events = await topEvents({
+    tags: sanitizeStaticTags(args.tags),
+    k: num(args.k) ?? 10,
     city: str(args.city),
-    audience: str(args.audience),
-    isFree: bool(args.is_free),
-    limit,
+    from: str(args.from),
+    to: str(args.to),
+    freeOnly: bool(args.free_only),
+    preferFree: bool(args.free_only),
   });
-  if (events.length === 0) events = await upcomingEvents(limit);
 
+  // The model sees the full candidate list (including internal_tags, which are
+  // backend-only ranking hints) so it can curate; the UI action is what the
+  // user sees, so the orchestrator only renders the events the model picks —
+  // no action is emitted here.
   return {
     forModel: JSON.stringify({
       count: events.length,
-      events: events.map(brief),
+      note: "Candidates ranked by tag match. Curate: call show_events with the ids of the few (usually 3) that best fit the user, in your preferred order.",
+      events: events.map((e) => ({ ...brief(e), internal_tags: e.internal_tags })),
     }),
-    actions: [{ type: "events", title: "Recommended for you", events }],
+    actions: [],
   };
 }
 
@@ -217,25 +265,39 @@ async function runDraft(args: Record<string, unknown>): Promise<ToolOutcome> {
   };
 }
 
+async function runShowEvents(args: Record<string, unknown>): Promise<ToolOutcome> {
+  const ids = Array.isArray(args.ids) ? args.ids.map(String) : [];
+  const found = await Promise.all(ids.map((id) => getEvent(id)));
+  const events = found.filter((e): e is EventRecord => e !== null);
+
+  return {
+    forModel: JSON.stringify({ shown: events.length }),
+    actions:
+      events.length > 0
+        ? [
+            {
+              type: "events",
+              title: str(args.title) ?? "Picked for you",
+              events: events.map(toPublicEvent),
+            },
+          ]
+        : [],
+  };
+}
+
 // --- brief + coercion helpers ---------------------------------------------
 
-function brief(e: {
-  id: string;
-  title: string;
-  summary: string;
-  category: string;
-  start_time: string;
-  city: string | null;
-  is_free: boolean;
-}) {
+function brief(e: EventRecord) {
   return {
     id: e.id,
     title: e.title,
     summary: e.summary,
     category: e.category,
+    tags: e.tags,
     start_time: e.start_time,
     city: e.city,
     is_free: e.is_free,
+    accessibility: e.accessibility,
   };
 }
 

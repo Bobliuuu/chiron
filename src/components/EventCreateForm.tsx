@@ -6,7 +6,7 @@ import {
   EVENT_CATEGORIES,
   type EventCategory,
   type EventDraft,
-  type EventRecord,
+  type PublicEvent,
 } from "@/lib/types/events";
 import { toDatetimeLocal } from "@/lib/format";
 
@@ -65,7 +65,7 @@ export function EventCreateForm({
   onCreated,
 }: {
   draft: EventDraft;
-  onCreated: (event: EventRecord) => void;
+  onCreated: (event: PublicEvent) => void;
 }) {
   const [form, setForm] = useState<FormState>(() => fromDraft(draft));
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
@@ -106,7 +106,7 @@ export function EventCreateForm({
         return;
       }
       setStatus("done");
-      onCreated(data.event as EventRecord);
+      onCreated(data.event as PublicEvent);
     } catch {
       setStatus("error");
       setError("Network error — please try again.");

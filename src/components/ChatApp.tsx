@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { EventRecord } from "@/lib/types/events";
+import type { PublicEvent } from "@/lib/types/events";
+import type { Profile } from "@/lib/types/profile";
 import type { AgentResult } from "@/lib/agent/types";
 import { ChatMessageView, type UiMessage } from "@/components/ChatMessage";
 import { Composer } from "@/components/Composer";
 import { EventsPanel } from "@/components/EventsPanel";
+import { OnboardingQuiz } from "@/components/OnboardingQuiz";
+
+const PROFILE_STORAGE_KEY = "chiron_profile";
 
 const SUGGESTIONS = [
   "Find all events in Markham for food banks",
   "Recommend me some events",
   "Create an event for a charity fundraiser on June 20th at Cherry St",
+];
+
+const QUICK_SUGGESTIONS = [
+  "Find me something to do",
+  "Show free events",
 ];
 
 const GREETING: UiMessage = {
@@ -20,12 +29,23 @@ const GREETING: UiMessage = {
     "Hi, I'm Chiron 👋 I can help you find community events or publish a new one. What would you like to do?",
 };
 
+const QUICK_GREETING: UiMessage = {
+  id: "greeting",
+  role: "assistant",
+  content: "Hi, I'm Chiron 👋 I help you find things to do. What do you like?",
+};
+
 export function ChatApp() {
   const [messages, setMessages] = useState<UiMessage[]>([GREETING]);
   const [sending, setSending] = useState(false);
-  const [events, setEvents] = useState<EventRecord[]>([]);
+  const [events, setEvents] = useState<PublicEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [mode, setMode] = useState<AgentResult["mode"] | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  // null = still reading localStorage (avoids flashing the quiz on reload).
+  const [needsQuiz, setNeedsQuiz] = useState<boolean | null>(null);
+
+  const uiMode = profile?.ui_mode ?? "elaborate";
 
   const idRef = useRef(0);
   const nextId = () => `m${++idRef.current}`;
@@ -33,7 +53,32 @@ export function ChatApp() {
 
   useEffect(() => {
     void refreshEvents();
+    try {
+      const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Profile;
+        setProfile(parsed);
+        if (parsed.ui_mode === "quick") setMessages([QUICK_GREETING]);
+        setNeedsQuiz(false);
+      } else {
+        setNeedsQuiz(true);
+      }
+    } catch {
+      setNeedsQuiz(true);
+    }
   }, []);
+
+  function handleQuizDone(newProfile: Profile | null) {
+    setNeedsQuiz(false);
+    if (!newProfile) return; // skipped — stay in elaborate mode, ask again next visit
+    setProfile(newProfile);
+    try {
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(newProfile));
+    } catch {
+      // Private browsing etc. — the profile just won't persist.
+    }
+    if (newProfile.ui_mode === "quick") setMessages([QUICK_GREETING]);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -75,6 +120,15 @@ export function ChatApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: history.map((m) => ({ role: m.role, content: m.content })),
+          profile: profile
+            ? {
+                ui_mode: profile.ui_mode,
+                accessibility_needs: profile.accessibility_needs,
+                preferred_tags: profile.preferred_tags,
+                city: profile.city,
+                free_only: profile.free_only,
+              }
+            : null,
         }),
       });
       const data = (await res.json()) as AgentResult & { error?: string };
@@ -108,7 +162,7 @@ export function ChatApp() {
     }
   }
 
-  function handleEventCreated(event: EventRecord) {
+  function handleEventCreated(event: PublicEvent) {
     // Optimistically show it, then re-sort via a fresh fetch.
     setEvents((prev) =>
       [event, ...prev].sort((a, b) => a.start_time.localeCompare(b.start_time)),
@@ -126,6 +180,7 @@ export function ChatApp() {
 
   return (
     <div className="grid h-screen grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+      {needsQuiz === true && <OnboardingQuiz onDone={handleQuizDone} />}
       {/* Chat column */}
       <div className="flex h-screen flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
@@ -150,20 +205,27 @@ export function ChatApp() {
                 key={m.id}
                 message={m}
                 onEventCreated={handleEventCreated}
+                uiMode={uiMode}
               />
             ))}
 
             {messages.length <= 1 && (
               <div className="flex flex-wrap gap-2 pt-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-700"
-                  >
-                    {s}
-                  </button>
-                ))}
+                {(uiMode === "quick" ? QUICK_SUGGESTIONS : SUGGESTIONS).map(
+                  (s) => (
+                    <button
+                      key={s}
+                      onClick={() => send(s)}
+                      className={
+                        uiMode === "quick"
+                          ? "rounded-xl border-2 border-slate-300 bg-white px-5 py-3 text-lg text-slate-700 hover:border-brand-400 hover:text-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-300"
+                          : "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-700"
+                      }
+                    >
+                      {s}
+                    </button>
+                  ),
+                )}
               </div>
             )}
           </div>

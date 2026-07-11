@@ -38,6 +38,8 @@ function seed(input: EventInput): EventRecord {
     registration_instructions: null,
     host_organization: null,
     category: "other",
+    tags: [],
+    internal_tags: [],
     created_at: now,
     updated_at: now,
     ...input,
@@ -62,6 +64,8 @@ const store: EventRecord[] = [
     transportation: "On the 5 bus route",
     registration_instructions: "Walk in during distribution hours.",
     host_organization: "Markham Food Network",
+    tags: ["food", "free", "in_person", "drop_in", "recurring", "families", "adults", "wheelchair"],
+    internal_tags: ["evening_only", "bring_your_own_bag", "volunteers_assist"],
   }),
   seed({
     title: "Feed the Neighbourhood Charity Fundraiser",
@@ -82,6 +86,8 @@ const store: EventRecord[] = [
     registration_url: "https://example.org/feed-the-neighbourhood",
     registration_instructions: "Purchase tickets online in advance.",
     host_organization: "Toronto Cares Foundation",
+    tags: ["volunteering", "adults", "in_person", "registration_needed", "wheelchair", "asl"],
+    internal_tags: ["evening_only", "formal_attire", "loud_music", "food_provided"],
   }),
   seed({
     title: "Youth Coding Club — Saturday Session",
@@ -99,6 +105,8 @@ const store: EventRecord[] = [
     registration_url: "https://example.org/youth-coding",
     registration_instructions: "Register online, spots limited.",
     host_organization: "Code Forward",
+    tags: ["teens", "education", "free", "in_person", "registration_needed", "recurring"],
+    internal_tags: ["beginner_friendly", "mentors_present", "limited_spots"],
   }),
   seed({
     title: "Senior Wellness Morning",
@@ -117,6 +125,8 @@ const store: EventRecord[] = [
     transportation: "Parking and transit available",
     registration_instructions: "Just show up, or call ahead.",
     host_organization: "York Region Health Collective",
+    tags: ["seniors", "health", "sports", "free", "in_person", "drop_in", "wheelchair", "large_print", "quiet_space"],
+    internal_tags: ["morning_only", "gentle_pace", "refreshments_provided"],
   }),
 ];
 
@@ -132,6 +142,12 @@ export function applyFilters(
   return events
     .filter((e) => {
       if (filters.category && e.category !== filters.category) return false;
+      if (
+        filters.tags &&
+        filters.tags.length > 0 &&
+        !filters.tags.some((t) => e.tags.includes(t))
+      )
+        return false;
       if (city && (e.city ?? "").toLowerCase() !== city) return false;
       if (typeof filters.isFree === "boolean" && e.is_free !== filters.isFree)
         return false;

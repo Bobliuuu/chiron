@@ -1,6 +1,8 @@
 import { createEvent, upcomingEvents } from "@/lib/supabase/events";
+import { tagEvent } from "@/lib/pipeline/tag-event";
 import {
   EVENT_CATEGORIES,
+  toPublicEvent,
   type EventCategory,
   type EventInput,
 } from "@/lib/types/events";
@@ -11,7 +13,7 @@ export const runtime = "nodejs";
 export async function GET(): Promise<Response> {
   try {
     const events = await upcomingEvents(50);
-    return Response.json({ events });
+    return Response.json({ events: events.map(toPublicEvent) });
   } catch (err) {
     console.error("[/api/events GET] error:", err);
     return Response.json({ error: "Failed to load events." }, { status: 500 });
@@ -33,8 +35,12 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const event = await createEvent(parsed.input);
-    return Response.json({ event }, { status: 201 });
+    // Tagging pipeline: derive static tags (per the rubric) and internal
+    // ranking tags before the row is written, so the event is immediately
+    // discoverable by tag.
+    const { tags, internal_tags } = await tagEvent(parsed.input);
+    const event = await createEvent({ ...parsed.input, tags, internal_tags });
+    return Response.json({ event: toPublicEvent(event) }, { status: 201 });
   } catch (err) {
     console.error("[/api/events POST] error:", err);
     return Response.json({ error: "Failed to create event." }, { status: 500 });

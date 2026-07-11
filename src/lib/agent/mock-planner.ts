@@ -4,6 +4,7 @@ import {
   EVENT_CATEGORIES,
   type EventCategory,
 } from "@/lib/types/events";
+import type { AgentProfile } from "@/lib/types/profile";
 
 // A deterministic, no-LLM fallback so the app is fully demoable without an
 // OpenAI key. It does lightweight intent detection + entity extraction and then
@@ -57,12 +58,15 @@ const MONTHS = [
   "december",
 ];
 
-export async function planWithoutLLM(history: ChatMessage[]): Promise<Plan> {
+export async function planWithoutLLM(
+  history: ChatMessage[],
+  profile?: AgentProfile | null,
+): Promise<Plan> {
   const last = [...history].reverse().find((m) => m.role === "user");
   const text = (last?.content ?? "").toLowerCase();
 
   if (isCreateIntent(text)) return planCreate(last?.content ?? "");
-  if (isRecommendIntent(text)) return planRecommend(text);
+  if (isRecommendIntent(text)) return planRecommend(text, profile);
   return planSearch(text);
 }
 
@@ -107,16 +111,41 @@ async function planSearch(text: string): Promise<Plan> {
   return { message, actions: outcome.actions };
 }
 
-async function planRecommend(text: string): Promise<Plan> {
-  const city = extractCity(text);
-  const category = extractCategory(text);
-  const isFree = text.includes("free") ? true : undefined;
+async function planRecommend(
+  text: string,
+  profile?: AgentProfile | null,
+): Promise<Plan> {
+  const city = extractCity(text) ?? profile?.city ?? undefined;
+  const isFree =
+    text.includes("free") || profile?.free_only ? true : undefined;
+  const tags = [
+    ...new Set([
+      ...extractTags(text),
+      ...(profile?.preferred_tags ?? []),
+      ...(profile?.accessibility_needs ?? []),
+    ]),
+  ];
 
-  const outcome = await executeTool("recommend_events", {
-    interests: category ?? extractQuery(text, category),
+  // Mirror the two-step flow the real agent uses: broad top-k retrieval, then
+  // curate the best few into cards.
+  const top = await executeTool("get_top_events", {
+    tags,
+    k: 6,
     city,
-    is_free: isFree,
-    limit: 3,
+    free_only: isFree,
+  });
+
+  let candidateIds: string[] = [];
+  try {
+    const parsed = JSON.parse(top.forModel) as { events?: { id: string }[] };
+    candidateIds = (parsed.events ?? []).map((e) => e.id);
+  } catch {
+    candidateIds = [];
+  }
+
+  const outcome = await executeTool("show_events", {
+    ids: candidateIds.slice(0, 3),
+    title: "Recommended for you",
   });
 
   const count = countFromActions(outcome.actions);
@@ -165,6 +194,37 @@ function extractCity(text: string): string | undefined {
   }
   const m = text.match(/\bin ([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)?)/);
   return m ? m[1] : undefined;
+}
+
+// Category → topic tag in the static vocabulary (src/lib/tags.ts).
+const CATEGORY_TAG: Partial<Record<EventCategory, string>> = {
+  food_bank: "food",
+  health: "health",
+  education: "education",
+  arts: "arts",
+  employment: "employment",
+  housing: "housing",
+  community: "social",
+  fundraiser: "volunteering",
+  youth: "teens",
+  seniors: "seniors",
+};
+
+/** Rough static-tag extraction for the no-LLM path. */
+function extractTags(text: string): string[] {
+  const tags = new Set<string>();
+  const category = extractCategory(text);
+  const catTag = category ? CATEGORY_TAG[category] : undefined;
+  if (catTag) tags.add(catTag);
+  if (/\bfree\b/.test(text)) tags.add("free");
+  if (/\bkids?|children\b/.test(text)) tags.add("kids");
+  if (/\bteens?|youth\b/.test(text)) tags.add("teens");
+  if (/\bseniors?\b/.test(text)) tags.add("seniors");
+  if (/\bfamil(y|ies)\b/.test(text)) tags.add("families");
+  if (/\bonline|virtual\b/.test(text)) tags.add("online");
+  if (/\bwheelchair|accessible\b/.test(text)) tags.add("wheelchair");
+  if (/\bquiet|sensory|not too loud\b/.test(text)) tags.add("quiet_space");
+  return [...tags];
 }
 
 function extractCategory(text: string): EventCategory | undefined {

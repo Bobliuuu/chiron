@@ -5,7 +5,7 @@ insert into public.events
   (title, summary, description, category, start_time, end_time,
    is_online, location_name, address, city, is_free, cost_note,
    audience, accessibility, transportation, registration_url,
-   registration_instructions, host_organization)
+   registration_instructions, host_organization, tags, internal_tags)
 values
   ('Markham Community Food Bank — Evening Distribution',
    'Free groceries and fresh produce, no appointment needed.',
@@ -14,7 +14,9 @@ values
    now() + interval '3 days' + interval '20 hours',
    false, 'Markham Community Centre', '3201 Bur Oak Ave', 'Markham',
    true, null, 'families, individuals', '{wheelchair}', 'On the 5 bus route',
-   null, 'Walk in during distribution hours.', 'Markham Food Network'),
+   null, 'Walk in during distribution hours.', 'Markham Food Network',
+   '{food,free,in_person,drop_in,recurring,families,adults,wheelchair}',
+   '{evening_only,bring_your_own_bag,volunteers_assist}'),
 
   ('Feed the Neighbourhood Charity Fundraiser',
    'An evening gala to raise funds for local food security programs.',
@@ -24,7 +26,9 @@ values
    false, 'The Cherry Street Hall', '15 Cherry St', 'Toronto',
    false, '$75 per ticket', 'adults', '{wheelchair,asl}', 'Streetcar 504 to Cherry St',
    'https://example.org/feed-the-neighbourhood',
-   'Purchase tickets online in advance.', 'Toronto Cares Foundation'),
+   'Purchase tickets online in advance.', 'Toronto Cares Foundation',
+   '{volunteering,adults,in_person,registration_needed,wheelchair,asl}',
+   '{evening_only,formal_attire,loud_music,food_provided}'),
 
   ('Youth Coding Club — Saturday Session',
    'Free drop-in coding club for teens, all skill levels welcome.',
@@ -34,7 +38,9 @@ values
    false, 'Scarborough Public Library', '1076 Ellesmere Rd', 'Toronto',
    true, null, 'teens 13-18', '{}', null,
    'https://example.org/youth-coding',
-   'Register online, spots limited.', 'Code Forward'),
+   'Register online, spots limited.', 'Code Forward',
+   '{teens,education,free,in_person,registration_needed,recurring}',
+   '{beginner_friendly,mentors_present,limited_spots}'),
 
   ('Senior Wellness Morning',
    'Gentle exercise, health screening, and coffee for seniors.',
@@ -43,4 +49,6 @@ values
    now() + interval '7 days' + interval '11 hours',
    false, 'Markham Seniors Centre', '8100 Warden Ave', 'Markham',
    true, null, 'seniors 55+', '{wheelchair,large_print}', 'Parking and transit available',
-   null, 'Just show up, or call ahead.', 'York Region Health Collective');
+   null, 'Just show up, or call ahead.', 'York Region Health Collective',
+   '{seniors,health,sports,free,in_person,drop_in,wheelchair,large_print,quiet_space}',
+   '{morning_only,gentle_pace,refreshments_provided}');

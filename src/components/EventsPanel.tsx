@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { EventRecord } from "@/lib/types/events";
+import type { PublicEvent } from "@/lib/types/events";
 import { EventCard } from "@/components/EventCard";
 import { formatDate } from "@/lib/format";
 
@@ -12,7 +12,7 @@ export function EventsPanel({
   events,
   loading,
 }: {
-  events: EventRecord[];
+  events: PublicEvent[];
   loading: boolean;
 }) {
   const groups = useMemo(() => groupByDay(events), [events]);
@@ -49,8 +49,8 @@ export function EventsPanel({
   );
 }
 
-function groupByDay(events: EventRecord[]) {
-  const map = new Map<string, EventRecord[]>();
+function groupByDay(events: PublicEvent[]) {
+  const map = new Map<string, PublicEvent[]>();
   for (const e of events) {
     const day = formatDate(e.start_time) || "Date TBD";
     if (!map.has(day)) map.set(day, []);

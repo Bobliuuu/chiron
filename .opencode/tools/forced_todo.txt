@@ -1,0 +1,41 @@
+Drive an Evolved Skill (E-skill) phase-by-phase. Each call advances phase state; the plugin sends the next `[FORCED TODO]` prompt on the following turn.
+
+**Calling this tool ends your turn.** After any forced_todo call, write nothing else and call no other tools — the next turn fires with the updated state.
+
+## Actions
+
+### roadmap
+Declare which phases of a skill you'll run. Call it once when starting a skill.
+- skill_name (string): the skill folder name (e.g. "plan-architect").
+- phases (string[]): phase ids to run, in order. Subset of the skill's phases is fine — pick the ones the user's task needs.
+- mode (string, optional): "full" (default) or "quick". Quick trades verification rigor for speed — the orchestrator skips or lightens the per-phase verification rounds. Use quick only when the user signals speed over rigor (a draft, a throwaway run, "quick pass"); default to full otherwise.
+
+Calling roadmap while another skill's roadmap is still active starts that skill as a nested sub-skill. When the sub-skill's phases complete (or it is aborted), the calling skill resumes where it left off. Nesting depth is capped at 5.
+
+### progress
+Record progress on the current phase.
+- summary (string): your account of what was done. The prompt sent by the plugin carries the authoritative summary-format spec — follow that.
+
+### ask
+Pause the workflow to ask the user a clarifying question. Always legal, regardless of phase state.
+- question (string): the question text, mirroring what you wrote to the user.
+
+Write the question text in your reply BEFORE calling ask, so the user sees it. After they answer, the next turn resumes acting on the current phase; call progress when done.
+
+### extend
+Append re-runs of prior phases to the end of the roadmap. Use this from an "iterate"-style phase when verification surfaced gaps and one or more earlier phases need to be repeated against the fixes.
+- phases (string[]): phase ids to re-run, in the order they should run. Pass the original phase ids as written in the SKILL.md. Re-runs are appended automatically.
+
+Original verified phases stay verified. Each re-run is a new pending phase that uses the original's content and verification rubric. If you expect that further iteration may be needed, include the iterate phase itself at the end of the list — otherwise the loop runs only once.
+
+extend does NOT change the current phase. You stay in whatever phase you're in. The new entries fire in order after the current phase verifies and the roadmap advances.
+
+### abort
+Stop the active roadmap without finishing its remaining phases. No arguments. If it was a nested sub-skill, the calling skill resumes; otherwise the run ends.
+
+Only abort when the user asks to cancel, or when continuing is genuinely impossible (missing access, task invalidated). Never abort because a phase is difficult, verification failed, or you hit errors — fix the problem and continue, or use `ask` if you need the user's input.
+
+## Notes
+
+- progress, ask, extend, and abort always apply to the most recently started roadmap that is still active (the deepest sub-skill).
+- The roadmap is set once via `roadmap`; `extend` only appends.

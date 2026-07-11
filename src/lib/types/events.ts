@@ -38,6 +38,13 @@ export interface EventRecord {
   summary: string;
   description: string | null;
   category: EventCategory;
+  /** Static vocabulary tags (see src/lib/tags.ts) — the primary filter. */
+  tags: string[];
+  /**
+   * Free-form agent-generated tags used only for backend ranking. Stripped
+   * before any event is sent to the client (see toPublicEvent).
+   */
+  internal_tags: string[];
   start_time: string; // ISO 8601
   end_time: string | null;
   is_online: boolean;
@@ -63,6 +70,8 @@ export interface EventInput {
   summary: string;
   description?: string | null;
   category?: EventCategory;
+  tags?: string[];
+  internal_tags?: string[];
   start_time: string;
   end_time?: string | null;
   is_online?: boolean;
@@ -86,9 +95,20 @@ export interface EventInput {
  */
 export type EventDraft = Partial<EventInput>;
 
+/** An event as exposed to the browser — internal_tags removed. */
+export type PublicEvent = Omit<EventRecord, "internal_tags">;
+
+/** Strip backend-only fields before an event leaves the server. */
+export function toPublicEvent(e: EventRecord): PublicEvent {
+  const { internal_tags: _internal, ...pub } = e;
+  return pub;
+}
+
 export interface EventSearchFilters {
   /** Free-text keyword match over title/summary/description/host. */
   query?: string;
+  /** Static vocabulary tags — event must overlap at least one. */
+  tags?: string[];
   city?: string;
   category?: EventCategory;
   /** ISO date-time lower bound (inclusive). */

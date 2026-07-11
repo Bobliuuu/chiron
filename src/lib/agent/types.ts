@@ -1,4 +1,4 @@
-import type { EventDraft, EventRecord } from "@/lib/types/events";
+import type { EventDraft, PublicEvent } from "@/lib/types/events";
 
 export type ChatRole = "user" | "assistant";
 
@@ -12,7 +12,7 @@ export interface ChatMessage {
  * The assistant's prose lives in AgentResult.message; these are the "cards".
  */
 export type UiAction =
-  | { type: "events"; title: string; events: EventRecord[] }
+  | { type: "events"; title: string; events: PublicEvent[] }
   | { type: "event_draft"; draft: EventDraft };
 
 export interface AgentResult {
