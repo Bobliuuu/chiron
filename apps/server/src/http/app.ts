@@ -19,15 +19,28 @@ import {
 import { env, currentMode as mode } from "../config";
 import { logVerbose } from "../log";
 import { runAgent } from "../agent/orchestrator";
-import { createEvent, getEvent, upcomingEvents } from "../data/events";
+import {
+  createEvent,
+  eventsByCreator,
+  getEvent,
+  updateEvent,
+  upcomingEvents,
+} from "../data/events";
 import {
   defaultRegistrationFormSchema,
   getEventRegistrationForm,
   sanitizeRegistrationFormSchema,
   upsertEventRegistrationForm,
 } from "../data/event-registration-forms";
-import { upsertEventRegistration } from "../data/event-registrations";
 import { getProfile, upsertProfile } from "../data/profiles";
+import {
+  deleteEventRegistration,
+  getEventRegistration,
+  registrationsByProfile,
+  updateEventRegistration,
+  upsertEventRegistration,
+  type EventRegistrationPatch,
+} from "../data/event-registrations";
 import { tagEvent } from "../pipeline/tag-event";
 import { uploadEventImage } from "../data/storage";
 import { requireAuth, requireUserOrChannelKey, type AuthVariables } from "./auth";
@@ -155,7 +168,12 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
       // ranking tags before the row is written, so the event is immediately
       // discoverable by tag.
       const { tags, internal_tags } = await tagEvent(parsed.input);
-      const event = await createEvent({ ...parsed.input, tags, internal_tags });
+      const event = await createEvent({
+        ...parsed.input,
+        tags,
+        internal_tags,
+        created_by: c.get("authUser").id,
+      });
       return c.json({ event: toPublicEvent(event) }, 201);
     } catch (err) {
       console.error("[/api/events POST] error:", err);
@@ -282,6 +300,128 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
     );
   });
 
+  // GET /api/my/events -> events the signed-in user published.
+  app.get("/api/my/events", requireAuth, async (c) => {
+    try {
+      const events = await eventsByCreator(c.get("authUser").id);
+      return c.json({ events: events.map(toPublicEvent) });
+    } catch (err) {
+      console.error("[/api/my/events GET] error:", err);
+      return c.json({ error: "Failed to load your events." }, 500);
+    }
+  });
+
+  // PATCH /api/events/:id -> owner edits an event; tags recompute.
+  app.patch("/api/events/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    if (!id || !isUuid(id)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+
+    const parsed = validateEvent(body);
+    if ("error" in parsed) {
+      return c.json({ error: parsed.error }, 400);
+    }
+
+    try {
+      const existing = await getEvent(id);
+      if (!existing) return c.json({ error: "Event not found." }, 404);
+      if (existing.created_by !== c.get("authUser").id) {
+        return c.json({ error: "You can only edit events you created." }, 403);
+      }
+
+      // Content changed → re-run the tagging pipeline so tags stay honest.
+      const { tags, internal_tags } = await tagEvent(parsed.input);
+      const event = await updateEvent(id, {
+        ...parsed.input,
+        tags,
+        internal_tags,
+      });
+      return c.json({ event: toPublicEvent(event) });
+    } catch (err) {
+      console.error("[/api/events PATCH] error:", err);
+      return c.json({ error: "Failed to update event." }, 500);
+    }
+  });
+
+  // GET /api/my/registrations -> the signed-in user's registrations.
+  app.get("/api/my/registrations", requireAuth, async (c) => {
+    try {
+      const registrations = await registrationsByProfile(c.get("authUser").id);
+      return c.json({ registrations });
+    } catch (err) {
+      console.error("[/api/my/registrations GET] error:", err);
+      return c.json({ error: "Failed to load your registrations." }, 500);
+    }
+  });
+
+  // PATCH /api/event-registrations/:id -> owner edits their registration.
+  app.patch("/api/event-registrations/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    if (!id || !isUuid(id)) {
+      return c.json({ error: "A valid registration id is required." }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+
+    try {
+      const existing = await getEventRegistration(id);
+      if (!existing) return c.json({ error: "Registration not found." }, 404);
+      if (existing.profile_id !== c.get("authUser").id) {
+        return c.json(
+          { error: "You can only edit your own registrations." },
+          403,
+        );
+      }
+
+      const registration = await updateEventRegistration(
+        id,
+        sanitizeRegistrationPatch(body),
+      );
+      return c.json({ registration });
+    } catch (err) {
+      console.error("[/api/event-registrations PATCH] error:", err);
+      return c.json({ error: "Failed to update registration." }, 500);
+    }
+  });
+
+  // DELETE /api/event-registrations/:id -> owner cancels their registration.
+  app.delete("/api/event-registrations/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    if (!id || !isUuid(id)) {
+      return c.json({ error: "A valid registration id is required." }, 400);
+    }
+
+    try {
+      const existing = await getEventRegistration(id);
+      if (!existing) return c.json({ error: "Registration not found." }, 404);
+      if (existing.profile_id !== c.get("authUser").id) {
+        return c.json(
+          { error: "You can only cancel your own registrations." },
+          403,
+        );
+      }
+
+      await deleteEventRegistration(id);
+      return c.json({ deleted: true });
+    } catch (err) {
+      console.error("[/api/event-registrations DELETE] error:", err);
+      return c.json({ error: "Failed to cancel registration." }, 500);
+    }
+  });
+
   // POST /api/upload -> store an event image in the public bucket.
   // multipart/form-data with a single "file" field; returns { url }.
   app.post("/api/upload", requireAuth, async (c) => {
@@ -395,6 +535,27 @@ function sanitizeAnswers(raw: unknown): Record<string, boolean> {
     if (known.has(key) && typeof value === "boolean") out[key] = value;
   }
   return out;
+}
+
+/** Whitelist of editable registration fields; ownership fields stay fixed. */
+function sanitizeRegistrationPatch(raw: unknown): EventRegistrationPatch {
+  const b = (raw ?? {}) as Record<string, unknown>;
+  const patch: EventRegistrationPatch = {};
+  if (b.status === "interested" || b.status === "registered")
+    patch.status = b.status;
+  for (const key of [
+    "attendee_name",
+    "contact_email",
+    "contact_phone",
+    "accessibility_requests",
+    "notes",
+  ] as const) {
+    if (typeof b[key] === "string" || b[key] === null)
+      patch[key] = (b[key] as string | null) || null;
+  }
+  if (typeof b.form_response === "object" && b.form_response !== null)
+    patch.form_response = b.form_response as Record<string, unknown>;
+  return patch;
 }
 
 function isUuid(v: string): boolean {

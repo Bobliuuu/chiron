@@ -118,6 +118,38 @@ export async function topEvents(q: TopEventsQuery): Promise<EventRecord[]> {
   return rankEvents(pool, ranking, k);
 }
 
+export async function eventsByCreator(userId: string): Promise<EventRecord[]> {
+  const db = getSupabaseAdmin();
+  if (!db) return mockStore.byCreator(userId);
+
+  const { data, error } = await db
+    .from(TABLE)
+    .select("*")
+    .eq("created_by", userId)
+    .order("start_time", { ascending: true });
+
+  if (error) throw new Error(`eventsByCreator failed: ${error.message}`);
+  return (data ?? []) as EventRecord[];
+}
+
+export async function updateEvent(
+  id: string,
+  patch: Partial<EventInput>,
+): Promise<EventRecord> {
+  const db = getSupabaseAdmin();
+  if (!db) return mockStore.update(id, patch);
+
+  const { data, error } = await db
+    .from(TABLE)
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(`updateEvent failed: ${error.message}`);
+  return data as EventRecord;
+}
+
 export async function getEvent(id: string): Promise<EventRecord | null> {
   const db = getSupabaseAdmin();
   if (!db) return mockStore.get(id);

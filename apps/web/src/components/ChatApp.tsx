@@ -6,6 +6,7 @@ import { ChatMessageView, type UiMessage } from "@/components/ChatMessage";
 import { Composer } from "@/components/Composer";
 import { EventsPanel } from "@/components/EventsPanel";
 import { OnboardingQuiz } from "@/components/OnboardingQuiz";
+import { ProfilePanel } from "@/components/ProfilePanel";
 import { apiUrl, API_URL, CHANNEL, logApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -43,6 +44,7 @@ export function ChatApp() {
   const [profile, setProfile] = useState<Profile | null>(null);
   // null = still reading localStorage (avoids flashing the quiz on reload).
   const [needsQuiz, setNeedsQuiz] = useState<boolean | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const uiMode = profile?.ui_mode ?? "elaborate";
 
@@ -233,6 +235,18 @@ export function ChatApp() {
   return (
     <div className="grid h-screen grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
       {needsQuiz === true && <OnboardingQuiz onDone={handleQuizDone} />}
+      {profileOpen && (
+        <ProfilePanel
+          profile={profile}
+          onProfileUpdated={(p) => {
+            setProfile(p);
+            if (p.ui_mode === "quick" && messages.length <= 1)
+              setMessages([QUICK_GREETING]);
+          }}
+          onEventsChanged={() => void refreshEvents()}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
       {/* Chat column */}
       <div className="flex h-screen flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
@@ -249,6 +263,15 @@ export function ChatApp() {
           </div>
           <div className="flex items-center gap-3">
             {mode && <ModeBadge mode={mode} />}
+            <button
+              type="button"
+              onClick={() => setProfileOpen(true)}
+              aria-label="Open your profile"
+              title="Your profile"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700"
+            >
+              {(user?.email?.[0] ?? "U").toUpperCase()}
+            </button>
             <button
               type="button"
               onClick={() => void signOut()}

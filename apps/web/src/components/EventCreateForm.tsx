@@ -65,17 +65,25 @@ function fromDraft(d: EventDraft): FormState {
 export function EventCreateForm({
   draft,
   onCreated,
+  event,
 }: {
   draft: EventDraft;
   onCreated: (event: PublicEvent) => void;
+  /** When set, the form edits this existing event (PATCH) instead of creating. */
+  event?: PublicEvent;
 }) {
   const { authFetch } = useAuth();
-  const [form, setForm] = useState<FormState>(() => fromDraft(draft));
+  const isEdit = Boolean(event);
+  const [form, setForm] = useState<FormState>(() =>
+    fromDraft(event ? (event as EventDraft) : draft),
+  );
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    event?.image_url ?? null,
+  );
   const [imageStatus, setImageStatus] = useState<
     "none" | "uploading" | "done" | "error"
   >("none");
@@ -119,11 +127,14 @@ export function EventCreateForm({
     };
 
     try {
-      const res = await authFetch(apiUrl("/api/events"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await authFetch(
+        apiUrl(isEdit ? `/api/events/${event!.id}` : "/api/events"),
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       const data = await res.json();
       if (!res.ok) {
         setStatus("error");
@@ -141,8 +152,9 @@ export function EventCreateForm({
   if (status === "done") {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-        ✓ Published “{form.title || "your event"}”. It now appears in the
-        upcoming events list and can be recommended to the community.
+        {isEdit
+          ? `✓ Saved changes to “${form.title || "your event"}”.`
+          : `✓ Published “${form.title || "your event"}”. It now appears in the upcoming events list and can be recommended to the community.`}
       </div>
     );
   }
@@ -155,9 +167,11 @@ export function EventCreateForm({
     >
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-800">
-          Review &amp; publish event
+          {isEdit ? "Edit event" : "Review & publish event"}
         </h3>
-        <span className="text-xs text-slate-400">Prefilled by Chiron</span>
+        {!isEdit && (
+          <span className="text-xs text-slate-400">Prefilled by Chiron</span>
+        )}
       </div>
 
       <Field label="Title" required>
@@ -376,7 +390,13 @@ export function EventCreateForm({
           disabled={status === "saving"}
           className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
-          {status === "saving" ? "Publishing…" : "Publish event"}
+          {status === "saving"
+            ? isEdit
+              ? "Saving…"
+              : "Publishing…"
+            : isEdit
+              ? "Save changes"
+              : "Publish event"}
         </button>
       </div>
     </form>
