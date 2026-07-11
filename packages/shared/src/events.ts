@@ -47,6 +47,8 @@ export interface EventRecord {
   internal_tags: string[];
   /** Public URL of an image shown on the event card (Supabase Storage). */
   image_url: string | null;
+  /** auth.users id of the publisher; null for channel-service/legacy events. */
+  created_by: string | null;
   start_time: string; // ISO 8601
   end_time: string | null;
   is_online: boolean;
@@ -78,6 +80,7 @@ export interface EventInput {
   tags?: string[];
   internal_tags?: string[];
   image_url?: string | null;
+  created_by?: string | null;
   start_time: string;
   end_time?: string | null;
   is_online?: boolean;

@@ -1,36 +1,38 @@
 # Research intent
 
 ## Topic
-Easiest free way to send emails from this Next.js 15 + Supabase project (Chiron — nonprofit community event assistant). Free tier, minimal integration friction.
+How blind users browse the web, and how to make Chiron (this project — a Next.js 15 + Supabase + OpenAI chat-first nonprofit event assistant) more accessible in general.
 
 ## Category slug
-email-sending
+accessibility
 
 ## Scope
-- Transactional email use cases most relevant to a community event app: account auth emails (sign-up confirmation, password reset, magic link), event notifications (new event posted, RSVP confirmations), and admin contact messages.
-- Free-tier options that work without a custom domain (or with one) and that integrate cleanly with Next.js App Router and Supabase.
-- Concrete recommendation with a minimal integration sketch.
+- Blind users' actual browsing experience: primary screen readers (NVDA, JAWS, VoiceOver), keyboard navigation, how semantic HTML and ARIA are perceived, common pain points on modern web apps.
+- General accessibility applicable to Chiron: WCAG 2.2 AA principles (perceivable, operable, understandable, robust), keyboard operability, color contrast, focus management, motion, cognitive load, mobile/touch, low vision, motor impairments.
+- Concrete, stack-specific guidance for Next.js 15 App Router, React 19, Tailwind, and Supabase-backed UI: semantic HTML patterns, ARIA use and abuse, `next/link` / `next/image` accessibility defaults, testing tools (axe-core, Lighthouse, Pa11y, screen reader smoke tests), and common React a11y pitfalls (auto-focus traps, missing alt text, focus loss on route change, streaming chat UI).
+- Chat interface-specific concerns: live regions for streamed LLM responses, focus management between turns, copyable transcripts, alt text on event cards, accessible forms for event publishing.
 
 ## Out of scope
-- Marketing/bulk email platforms (Mailchimp, Sendgrid Marketing Campaigns, etc.) — this is an app, not a newsletter.
-- Self-hosted SMTP relays (Postfix, Mailcow, etc.) — explicitly not "easy" for the user.
-- Paid tiers in depth — only mention as a "what you hit when you outgrow the free tier" footnote.
+- Deep legal-compliance write-up (ADA Title III, Section 508, European Accessibility Act) — mention only as a "why this matters" framing, not as the core deliverable.
+- Native iOS/Android app accessibility (Chiron is web-only).
+- Standalone color-blindness deep dive beyond contrast guidance — touch briefly under low-vision.
+- Auditing or accessibility testing of specific third-party libraries beyond what Chiron uses.
 
 ## Audience and depth
-The developer of this project. Technical, comfortable with Next.js App Router, Supabase, and reading API docs. Should compare options concretely (free quota, SDK shape, Supabase compatibility) and end with a clear pick, not a balanced survey.
+The reader is Chiron's developer (technical, comfortable with Next.js App Router, React 19, Tailwind, Supabase). Assume familiarity with HTML and component patterns; do not re-explain what a `<button>` or `useState` is. The write-up should be actionable — every recommendation should map to a concrete change in the codebase or a tool to install.
 
 ## Output target
-docs/research/email-sending.md
+docs/research/accessibility.md
 
 ## Merge hint
 none
 
 ## Must-cover questions
-- What are the best free-tier email-sending services in 2026 for a Next.js + Supabase app?
-- Which one has the lowest integration friction (best SDK for Next.js App Router, ideally no separate SMTP config, ideally works with Supabase Auth out of the box)?
-- What are the real free-tier limits (emails/day, emails/month, sender-domain requirement)?
-- What does a minimal "send an email" code sketch look like in this stack?
-- Which option should Chiron use right now, and when does the team need to revisit?
+- How do blind users actually browse the web today? Which screen readers dominate, what input devices do they use, and what makes a site usable vs. unusable to them?
+- What do WCAG 2.2 AA's four POUR principles (perceivable / operable / understandable / robust) require at the code level, and which specific success criteria are most commonly violated in modern React apps?
+- What accessibility issues are most likely present in a chat-first Next.js + Supabase app like Chiron right now? (AI streamed output, dynamic route changes, auth flows, event cards, forms.)
+- Which Next.js / React / Tailwind patterns and libraries (semantic HTML, ARIA, `eslint-plugin-jsx-a11y`, React Aria, Radix primitives, axe-core in tests, Lighthouse CI) move the needle fastest for a small project?
+- What are the chat-UI-specific a11y requirements (live regions, polite vs. assertive announcements, focus after submit, exposing streaming state to assistive tech, alt text on dynamically generated event cards)?
 
 ## Source preferences
-None. General web sources (official docs, vendor pricing pages, recent dev-blog comparisons) are fine. Prefer sources from 2025–2026 so free-tier limits and SDK state are current.
+Prefer 2025–2026 sources where possible. Authoritative origins: W3C WAI (WCAG, ARIA APG), MDN, WebAIM, the A11y Project, axe-core / Deque docs, Next.js official docs, official screen reader vendor pages (NV Access, Apple VoiceOver support, Freedom Scientific). Avoid SEO-style listicles unless they cite primary sources.

@@ -43,6 +43,7 @@ function seed(input: EventInput): EventRecord {
     tags: [],
     internal_tags: [],
     image_url: null,
+    created_by: null,
     created_at: now,
     updated_at: now,
     ...input,
@@ -201,5 +202,16 @@ export const mockStore = {
     const record = seed(input);
     store.unshift(record);
     return record;
+  },
+  byCreator(userId: string): EventRecord[] {
+    return store
+      .filter((e) => e.created_by === userId)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  },
+  update(id: string, patch: Partial<EventInput>): EventRecord {
+    const idx = store.findIndex((e) => e.id === id);
+    if (idx === -1) throw new Error(`updateEvent failed: ${id} not found`);
+    store[idx] = { ...store[idx], ...patch, updated_at: new Date().toISOString() } as EventRecord;
+    return store[idx];
   },
 };

@@ -10,7 +10,12 @@ export async function chat(messages: ChatMessage[]): Promise<AgentResult> {
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Channel-service auth: WhatsApp users have no Supabase session, so
+        // the bot authenticates itself (see requireUserOrChannelKey).
+        "x-channel-key": env.channelApiKey,
+      },
       body: JSON.stringify(body),
     });
   } catch (err) {
