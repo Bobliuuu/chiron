@@ -97,31 +97,41 @@ curl -s -XPOST http://localhost:8787/v1/chat/completions \
 
 Complete these steps in the [VAPI dashboard](https://dashboard.vapi.ai).
 
-### 1. Create a Custom LLM credential
+### 1. Store Custom LLM credentials (auth only)
 
 1. Go to **Settings → Integrations → Custom LLM**
-2. **URL:** your backend base + `/v1`
-   - Local dev: `https://<ngrok-id>.ngrok-free.app/v1`
-   - Production: `https://api.<yourdomain>/v1`
-3. **Authentication:** API Key
-4. **API Key:** same value as `VAPI_LLM_API_KEY` in your backend `.env`
+2. **API Key:** same value as `VAPI_LLM_API_KEY` in your backend `.env`
 
-### 2. Create the assistant
+This page stores auth only — there is **no URL field** here in the current VAPI UI.
+
+### 2. Create the assistant (URL goes here)
 
 Use the dashboard UI or import the reference config at
 [`infra/vapi/assistant.json`](../infra/vapi/assistant.json).
 
-Key settings:
+Under **Assistants → Model**, set:
 
 | Setting | Value |
 | ------- | ----- |
-| Model provider | Custom LLM (your credential) |
+| Model provider | Custom LLM |
+| **URL / base endpoint** | Your public backend + `/v1` |
+| | Local dev: `https://<ngrok-id>.ngrok-free.app/v1` |
+| | Production: `https://api.<yourdomain>/v1` |
 | Model name | `chiron-voice` (arbitrary label) |
+
+VAPI appends `/chat/completions` to that URL, so the full request hits
+`.../v1/chat/completions`. If you omit `/v1`, VAPI will POST to `/chat/completions`
+and get a 404 (Chiron also accepts that path as a fallback).
+
+Other settings:
+
+| Setting | Value |
+| ------- | ----- |
 | System prompt | Leave empty or minimal — Chiron injects its own system prompt |
 | First message | `Hi, I'm Chiron. I can help you find community events or publish a new one. What can I do for you?` |
 | Voice | Your preferred TTS (e.g. ElevenLabs) |
 | Transcriber | Your preferred STT (e.g. Deepgram) |
-| Streaming | Off (non-streaming only for now) |
+| Streaming | On or off — Chiron supports both (VAPI sends `stream: true` by default) |
 
 Example assistant payload (PATCH `/assistant/{id}` via VAPI API):
 
@@ -187,8 +197,9 @@ instead of inline URL.
 
 | Symptom | Fix |
 | ------- | --- |
+| 404 on /chat/completions | Assistant URL is missing `/v1`. Set it to `https://<host>/v1`, not the bare ngrok root. |
 | 401 from backend | Check `VAPI_LLM_API_KEY` matches the credential in VAPI dashboard |
-| 501 streaming error | Disable streaming on the VAPI assistant |
+| 501 streaming error | Should not occur anymore — update backend. If it persists, restart `dev:server`. |
 | Agent says it can't publish | Ensure you're on voice channel (Custom LLM route always uses `voice`) and caller confirmed with "yes" |
 | Events don't persist | Configure `SUPABASE_URL` + keys in backend env |
 | Slow responses | Normal during tool calls; consider shorter first message and gpt-4o-mini |
