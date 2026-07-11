@@ -1,0 +1,20 @@
+{
+  "name": "Chiron Voice",
+  "firstMessage": "Hi, I'm Chiron. I can help you find community events or publish a new one. What can I do for you?",
+  "model": {
+    "provider": "custom-llm",
+    "url": "https://api.YOUR_DOMAIN/v1",
+    "model": "chiron-voice",
+    "temperature": 0.3,
+    "messages": []
+  },
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "YOUR_ELEVENLABS_VOICE_ID"
+  },
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en"
+  }
+}

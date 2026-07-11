@@ -1,47 +1,76 @@
 # Chiron Architecture
 
-This document describes the prototype scaffold: a Next.js app with a chat UI, an
-agent orchestrator that makes tool calls, and a Supabase-backed events store.
+Chiron is a monorepo with a **standalone backend** and **thin frontends**:
+
+- `apps/server` — a **Hono** service (the whole agent + events API). Packaged
+  with Docker and deployed on its own behind Cloudflare. Frontend-agnostic.
+- `apps/web` — a **Next.js** chat UI that holds no business logic; it calls the
+  backend over HTTP.
+- `packages/shared` (`@chiron/shared`) — the request/response **contract**
+  (channels, chat/agent types, event domain types) imported by both.
+
+The same backend serves every frontend (web today; a voice agent and WhatsApp
+bot next). It is **channel-aware**: each request declares its `channel`, and the
+agent adapts what it does with the response.
 
 ## High-level flow
 
 ```
- Browser (ChatApp)
-     │  POST /api/chat { messages }
+ Frontend (web ChatApp / voice / whatsapp / email)
+     │  POST {API_URL}/api/chat { channel, messages }
      ▼
- /api/chat ──► runAgent(history)                     [src/lib/agent/orchestrator.ts]
+ apps/server  Hono  [src/http/app.ts]  ──► runAgent({ channel, messages })   [src/agent/orchestrator.ts]
+                 │       capabilitiesFor(channel) → { richUi }
                  │
                  ├─ getLlmClient()  ── openai / local ─► tool-calling loop
-                 │     [src/lib/agent/llm.ts]            (model picks tools, we execute)
+                 │     [src/agent/llm.ts]               (model picks tools, we execute)
                  │        │  provider chosen by LLM_PROVIDER (auto: openai→local→mock)
+                 │        │  tools = toolsFor(caps)  ── draft_event only when richUi
                  │        └─ on any error ─► fall back to rule-based planner
-                 └─ no model configured ─► rule-based planner  [src/lib/agent/mock-planner.ts]
+                 └─ no model configured ─► rule-based planner  [src/agent/mock-planner.ts]
                  │
                  ▼  both paths call the same tools
-        executeTool(name, args)                       [src/lib/agent/tools.ts]
-                 │        ├─ search_events    ─► events repository
+        executeTool(name, args)                        [src/agent/tools.ts]
+                 │        ├─ search_events    ─► events repository  [src/data/events.ts]
                  │        ├─ recommend_events ─► events repository
                  │        └─ draft_event      ─► builds an EventDraft (no write)
                  ▼
         AgentResult { message, actions[], mode }
-                 │  actions render as cards / a prefilled form
+                 │  richUi → actions kept; prose-only → actions dropped
                  ▼
- Browser renders EventCard(s) and EventCreateForm inline in the chat
-                 │  form submit → POST /api/events → createEvent()
+ web renders EventCard(s) + EventCreateForm inline; other channels use message only
+                 │  web form submit → POST {API_URL}/api/events → createEvent()
                  ▼
         Supabase `events` table  (or in-memory mock store)
 ```
 
+## Channels
+
+`Channel = "web" | "voice" | "whatsapp" | "email" | "api"`, defined in
+`@chiron/shared`. `capabilitiesFor(channel)` maps it to `{ richUi }` — only
+`web` is rich today. The capability threads through three places
+(`orchestrator.ts`):
+
+| | `web` (richUi) | prose-only channels |
+| --- | --- | --- |
+| **Tools** (`toolsFor`) | search, recommend, **draft_event** | search, recommend (draft_event withheld) |
+| **Prompt** (`systemPrompt`) | "surface the creation form" | "no screen — ask short questions" |
+| **Result** (`finalize`) | `actions` kept (cards + form) | `actions` dropped (text only) |
+
+So the web app **always surfaces the event-creation UI** on create intent, while
+voice/whatsapp/email **keep asking questions like any LLM**. The mock planner
+mirrors the same split so the behavior holds with no API key.
+
 ## The agent
 
-The orchestrator (`runAgent`) is model-agnostic at the boundary: it always
-returns an `AgentResult`:
+The orchestrator (`runAgent`) is model-agnostic at the boundary: given
+`{ channel, messages }` it always returns an `AgentResult`:
 
 ```ts
 interface AgentResult {
-  message: string;            // assistant prose (a chat bubble)
-  actions: UiAction[];        // cards to render beneath it
-  mode: { llm; db };          // llm: "openai" | "local" | "mock"
+  message: string;                       // assistant prose (a chat bubble)
+  actions: UiAction[];                   // cards to render beneath it (rich channels only)
+  mode: { llm; db; channel };            // llm: "openai" | "local" | "mock"
 }
 
 type UiAction =
@@ -51,13 +80,15 @@ type UiAction =
 
 Separating **prose** from **UiActions** is the key idea. The model writes a
 short natural-language reply, while structured results (event lists, the
-creation form) are rendered by React components — not stuffed into text. This
-keeps the UI accessible and lets the same agent output drive rich UI.
+creation form) are rendered by the web components — not stuffed into text. This
+keeps the UI accessible, lets the same agent output drive rich UI, and lets
+prose-only channels consume just `message`.
 
 ### Tools
 
-Defined once in `src/lib/agent/tools.ts` as OpenAI function schemas, with an
-`executeTool` dispatcher used by **both** the real and mock orchestrators:
+Defined once in `apps/server/src/agent/tools.ts` as OpenAI function schemas, with
+an `executeTool` dispatcher used by **both** the real and mock orchestrators.
+`toolsFor(caps)` selects which are advertised per channel:
 
 | Tool | Purpose | Produces |
 | --- | --- | --- |
@@ -88,8 +119,8 @@ no API key, and documents exactly what the agent is expected to extract.
 
 ## The data layer
 
-`src/lib/supabase/events.ts` is the single repository the app uses. It targets
-Supabase when configured and an in-memory store otherwise — callers never
+`apps/server/src/data/events.ts` is the single repository the backend uses. It
+targets Supabase when configured and an in-memory store otherwise — callers never
 branch on backend:
 
 ```ts
@@ -97,21 +128,24 @@ searchEvents(filters) · upcomingEvents(limit) · getEvent(id) · createEvent(in
 ```
 
 Filtering semantics are kept consistent between backends: the mock store uses a
-pure `applyFilters` function (`mock-store.ts`) that mirrors the Supabase query
-built in `events.ts`.
+pure `applyFilters` function (`data/mock-store.ts`) that mirrors the Supabase
+query built in `data/events.ts`.
 
 Schema lives in `supabase/migrations/0001_init.sql`; the `event_category` enum is
-kept in sync with `EVENT_CATEGORIES` in `src/lib/types/events.ts`.
+kept in sync with `EVENT_CATEGORIES` in `packages/shared/src/events.ts`.
 
-## The UI
+## The web UI (apps/web)
 
-- `ChatApp` — top-level client component: chat state, calls `/api/chat`, keeps
-  the right-hand events/calendar panel in sync, handles form submissions.
+A thin client — it holds no agent/data logic and reaches the backend through
+`src/lib/api.ts` (`NEXT_PUBLIC_API_URL`, sends `channel: "web"`).
+
+- `ChatApp` — top-level client component: chat state, calls `{API_URL}/api/chat`,
+  keeps the right-hand events/calendar panel in sync, handles form submissions.
 - `ChatMessageView` — renders a bubble plus any `UiAction` cards.
 - `EventCard` — an accessible event summary.
 - `EventsPanel` — upcoming events grouped by day (a lightweight calendar).
 - `EventCreateForm` — the creation "page" surfaced inline, prefilled from a
-  draft; submits to `POST /api/events`.
+  draft; submits to `{API_URL}/api/events`.
 
 Accessibility is treated as core (per the product overview): semantic elements,
 visible focus rings, keyboard-submittable composer, labelled form fields, and no
@@ -119,6 +153,8 @@ reliance on color alone.
 
 ## Extending this scaffold
 
+- **New frontend** (voice / WhatsApp): a new client that POSTs `/api/chat` with
+  its `channel` and renders `message` (see [`deploy.md`](deploy.md)).
 - **Streaming**: swap `/api/chat` to stream tokens + incremental actions.
 - **Auth & ownership**: add Supabase Auth; scope insert/update RLS to the owning
   nonprofit instead of the prototype's open policies.

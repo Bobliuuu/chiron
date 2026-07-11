@@ -1,0 +1,10 @@
+# Caddy config for the Cloudflare DNS-proxied-origin path.
+# Replace api.chiron.example with your real subdomain. TLS is terminated here
+# using a Cloudflare Origin Certificate (Full (strict) mode in the dashboard).
+# Generate the cert under SSL/TLS → Origin Server → Create Certificate, then
+# drop the PEM + key into ./deploy/certs/ (see docs/deploy.md).
+
+api.chiron.example {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+	reverse_proxy server:8787
+}

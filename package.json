@@ -2,30 +2,22 @@
   "name": "chiron",
   "private": true,
   "version": "0.1.0",
-  "description": "AI-first community event assistant — chat to find and publish nonprofit events.",
+  "description": "AI-first community event assistant — a channel-aware agent backend with multiple frontends.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "dev": "npm run dev --workspace @chiron/server",
+    "dev:web": "npm run dev --workspace @chiron/web",
+    "dev:server": "npm run dev --workspace @chiron/server",
+    "dev:whatsapp": "npm run dev --workspace @chiron/whatsapp",
+    "build": "npm run build --workspace @chiron/server && npm run build --workspace @chiron/web && npm run build --workspace @chiron/whatsapp",
+    "start:server": "npm run start --workspace @chiron/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspace @chiron/web"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
-    "next": "^15.1.6",
-    "openai": "^4.77.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.5",
-    "@types/react": "^19.0.7",
-    "@types/react-dom": "^19.0.3",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^9.18.0",
-    "eslint-config-next": "^15.1.6",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "resend": "^6.17.2"
   }
 }

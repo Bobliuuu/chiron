@@ -122,4 +122,8 @@ Don't switch providers just because the daily cap stings once. The SMTP path is 
 13. Supabase. "Send Email Hook." https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook. Accessed 2026-07-11.
 14. Resend. "Send emails with Next.js." https://resend.com/docs/send-with-nextjs. Accessed 2026-07-11.
 15. React Email. "Send email using Resend." https://react.email/docs/integrations/resend. Accessed 2026-07-11.
-16. Supabase
+16. Supabase Partners. "Resend." https://supabase.com/partners/integrations/resend. Accessed 2026-07-11.
+17. Resend. "Get Started with Resend and Supabase." https://resend.com/docs/knowledge-base/getting-started-with-resend-and-supabase. Accessed 2026-07-11.
+18. Resend. "resend – Node.js SDK." https://www.npmjs.com/package/resend. Accessed 2026-07-11.
+19. Supabase. "Custom Auth Emails with React Email and Resend." https://supabase.com/docs/guides/functions/examples/auth-send-email-hook-react-email-resend. Accessed 2026-07-11.
+20. Resend Blog. "How to configure Supabase to send emails from your domain." https://resend.com/blog/how-to-configure-supabase-to-send-emails-from-your-domain. Accessed 2026-07-11.

@@ -1,0 +1,46 @@
+# Chiron backend deployment. Runs the standalone agent+events API, optionally
+# behind Caddy which terminates TLS with a Cloudflare Origin Certificate so the
+# service can sit on a custom domain (api.<yourdomain>) as a Cloudflare
+# DNS-proxied origin. See docs/deploy.md.
+#
+#   docker compose up --build            # server only, on :8787
+#   docker compose --profile edge up -d  # server + Caddy TLS on :443
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    image: chiron-server
+    restart: unless-stopped
+    env_file:
+      - apps/server/.env
+    environment:
+      # Sensible defaults; override in apps/server/.env.
+      PORT: 8787
+    ports:
+      # Expose directly for local/dev or a non-TLS origin. When using the
+      # `edge` profile (Caddy), you can drop this and keep the server internal.
+      - "8787:8787"
+
+  # Optional TLS terminator for the DNS-proxied-origin path. Enable with:
+  #   docker compose --profile edge up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["edge"]
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Mount your Cloudflare Origin Certificate + key here (see docs/deploy.md).
+      - ./deploy/certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
