@@ -53,8 +53,12 @@ export function createApp(): Hono {
   app.get("/", (c) => c.json({ service: "chiron-backend", ok: true }));
 
   // VAPI Custom LLM — OpenAI-compatible ingress for phone calls.
+  // VAPI appends /chat/completions to the assistant "url". Use .../v1 as the
+  // base (→ /v1/chat/completions). Also accept /chat/completions when the
+  // base URL is set to the server root without /v1.
   if (env.vapiEnabled) {
     app.post("/v1/chat/completions", vapiAuth, handleChatCompletions);
+    app.post("/chat/completions", vapiAuth, handleChatCompletions);
   }
 
   // POST /api/chat  { channel, messages }  ->  AgentResult
