@@ -26,3 +26,20 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 *.tsbuildinfo
+
+# model files (downloaded locally; see scripts/setup-llama.sh)
+/models/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.h5
+*.pb
+*.tflite
+*.mar
+*.pkl
+*.joblib
+*.mlmodel

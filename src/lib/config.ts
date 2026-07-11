@@ -18,8 +18,9 @@ export const env = {
   localLlmEnabled: (process.env.LOCAL_LLM_ENABLED || "").toLowerCase() === "true",
   // OpenAI-compatible base URL. llama-server default is http://localhost:8080/v1.
   localLlmBaseUrl: process.env.LOCAL_LLM_BASE_URL || "http://localhost:8080/v1",
-  // Model name/path as the local server expects it.
-  localLlmModel: process.env.LOCAL_LLM_MODEL || "Qwen3.5-9B-Q4_K_M.gguf",
+  // Model name/path as the local server expects it. Defaults to the GGUF this
+  // repo's scripts/setup-llama.sh installs (Qwen3-8B, Q4_K_M quant).
+  localLlmModel: process.env.LOCAL_LLM_MODEL || "Qwen3-8B-Q4_K_M.gguf",
   // Most local servers ignore the key but require a non-empty string.
   localLlmApiKey: process.env.LOCAL_LLM_API_KEY || "sk-local",
 

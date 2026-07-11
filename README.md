@@ -30,7 +30,7 @@ Chiron degrades gracefully. Each capability lights up independently:
 | --- | --- |
 | _none_ | Mock planner + in-memory events (great for demos) |
 | `OPENAI_API_KEY` | Real OpenAI tool-calling orchestrator |
-| `LOCAL_LLM_ENABLED=true` | Local GGUF model (e.g. `Qwen3.5-9B-Q4_K_M.gguf`) via an OpenAI-compatible server — see [`docs/local-model.md`](docs/local-model.md) |
+| `LOCAL_LLM_ENABLED=true` | Local GGUF model (`Qwen3-8B-Q4_K_M.gguf`) via **llama.cpp** — run `./scripts/setup-llama.sh`, then `./scripts/serve-local-model.sh`. See [`docs/local-model.md`](docs/local-model.md) |
 | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Reads/writes a real Supabase `events` table |
 
 **LLM provider** is chosen by `LLM_PROVIDER` (default `auto`): OpenAI if keyed,
