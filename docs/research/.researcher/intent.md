@@ -1,38 +1,39 @@
 # Research intent
 
 ## Topic
-How blind users browse the web, and how to make Chiron (this project — a Next.js 15 + Supabase + OpenAI chat-first nonprofit event assistant) more accessible in general.
+Speech-to-text (STT) options for adding a voice-input feature to Chiron's chat interface — a Next.js 15 + Supabase + OpenAI nonprofit event assistant.
 
 ## Category slug
-accessibility
+speech-to-text
 
 ## Scope
-- Blind users' actual browsing experience: primary screen readers (NVDA, JAWS, VoiceOver), keyboard navigation, how semantic HTML and ARIA are perceived, common pain points on modern web apps.
-- General accessibility applicable to Chiron: WCAG 2.2 AA principles (perceivable, operable, understandable, robust), keyboard operability, color contrast, focus management, motion, cognitive load, mobile/touch, low vision, motor impairments.
-- Concrete, stack-specific guidance for Next.js 15 App Router, React 19, Tailwind, and Supabase-backed UI: semantic HTML patterns, ARIA use and abuse, `next/link` / `next/image` accessibility defaults, testing tools (axe-core, Lighthouse, Pa11y, screen reader smoke tests), and common React a11y pitfalls (auto-focus traps, missing alt text, focus loss on route change, streaming chat UI).
-- Chat interface-specific concerns: live regions for streamed LLM responses, focus management between turns, copyable transcripts, alt text on event cards, accessible forms for event publishing.
+- Realistic STT options for a small nonprofit web project: cloud APIs (OpenAI Whisper / gpt-4o-transcribe family, Deepgram Nova-3, AssemblyAI Universal, Google Cloud Speech-to-Text, Azure Speech, AWS Transcribe), browser-native Web Speech API, and self-hosted Whisper.cpp.
+- Comparison axes: free-tier generosity, per-minute cost beyond the free tier, self-hosting cost in money and time, browser support, latency and streaming behavior, integration effort with the existing Next.js 15 + Supabase + OpenAI stack.
+- Concrete code sketches for the recommended path: a Next.js App Router route handler that accepts a multipart audio upload and forwards it to OpenAI, plus a client-side `MediaRecorder` component that captures audio and posts it to the route.
+- Browser and mobile gotchas: Firefox's missing `SpeechRecognition`, Safari / iOS quirks (Siri prerequisite, PWA breakage, `AudioContext` user-gesture requirement), `getUserMedia` permissions flow, audio format compatibility (webm/opus vs mp4/AAC).
+- Privacy posture for a nonprofit community app: OpenAI's audio endpoint data controls (ZDR eligibility, no training use, no retention), DPA considerations, GDPR voice-recording requirements.
 
 ## Out of scope
-- Deep legal-compliance write-up (ADA Title III, Section 508, European Accessibility Act) — mention only as a "why this matters" framing, not as the core deliverable.
-- Native iOS/Android app accessibility (Chiron is web-only).
-- Standalone color-blindness deep dive beyond contrast guidance — touch briefly under low-vision.
-- Auditing or accessibility testing of specific third-party libraries beyond what Chiron uses.
+- Text-to-speech (TTS) — this is the inverse direction; mention only where a vendor bundles both.
+- Speaker diarization, language identification, or any non-transcription audio intelligence.
+- Fine-tuning or custom acoustic models — the project has no labeled voice corpus.
+- Live captioning for events (captioning one person's audio in real time on a stage) — out of scope; the feature is for chat-input only.
 
 ## Audience and depth
-The reader is Chiron's developer (technical, comfortable with Next.js App Router, React 19, Tailwind, Supabase). Assume familiarity with HTML and component patterns; do not re-explain what a `<button>` or `useState` is. The write-up should be actionable — every recommendation should map to a concrete change in the codebase or a tool to install.
+The reader is Chiron's developer (technical, comfortable with Next.js App Router, React 19, Tailwind, Supabase, OpenAI SDK). The write-up should be actionable — every recommendation should map to a concrete code path, vendor pricing page, or stack-specific configuration. No need to re-explain what `useState`, `fetch`, or `FormData` is.
 
 ## Output target
-docs/research/accessibility.md
+docs/research/speech-to-text.md
 
 ## Merge hint
 none
 
 ## Must-cover questions
-- How do blind users actually browse the web today? Which screen readers dominate, what input devices do they use, and what makes a site usable vs. unusable to them?
-- What do WCAG 2.2 AA's four POUR principles (perceivable / operable / understandable / robust) require at the code level, and which specific success criteria are most commonly violated in modern React apps?
-- What accessibility issues are most likely present in a chat-first Next.js + Supabase app like Chiron right now? (AI streamed output, dynamic route changes, auth flows, event cards, forms.)
-- Which Next.js / React / Tailwind patterns and libraries (semantic HTML, ARIA, `eslint-plugin-jsx-a11y`, React Aria, Radix primitives, axe-core in tests, Lighthouse CI) move the needle fastest for a small project?
-- What are the chat-UI-specific a11y requirements (live regions, polite vs. assertive announcements, focus after submit, exposing streaming state to assistive tech, alt text on dynamically generated event cards)?
+- List the realistic STT options for a small nonprofit web project, comparing free tiers, per-minute cost beyond them, and self-hosting (Whisper.cpp) cost in both money and time.
+- How easy is it to integrate each top option with the existing Next.js 15 + Supabase + OpenAI stack? What new SDKs, secrets, or routes are needed?
+- What is the latency and streaming behavior of each option? Does any support interim transcripts (live word-by-word) for real-time chat feel?
+- What browser support, permissions, and iOS / Firefox quirks will trip us up? Are there SDK-vs-API-only trade-offs in the browser?
+- What privacy posture (ZDR, DPA, GDPR) should a nonprofit community app worry about for voice input specifically?
 
 ## Source preferences
-Prefer 2025–2026 sources where possible. Authoritative origins: W3C WAI (WCAG, ARIA APG), MDN, WebAIM, the A11y Project, axe-core / Deque docs, Next.js official docs, official screen reader vendor pages (NV Access, Apple VoiceOver support, Freedom Scientific). Avoid SEO-style listicles unless they cite primary sources.
+Prefer 2025–2026 sources where possible. Authoritative origins: MDN (Web Speech API, MediaRecorder, MediaDevices), OpenAI official docs (audio endpoint, pricing, data controls, ZDR), Deepgram / AssemblyAI / Google / AWS / Azure vendor pricing pages, Mozilla Bugzilla for Firefox status, Can I Use for browser compatibility, and recent privacy regulator guidance (AEPD, EDPB). Avoid SEO listicles unless they cite primary sources.
