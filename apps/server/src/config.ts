@@ -48,6 +48,12 @@ export const env = {
     "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 
+  // --- Trusted channel services (WhatsApp bot, voice adapter, tests) ---
+  // Shared secret for server-to-server /api/chat calls from channel bots that
+  // have no signed-in Supabase user (a caller on the phone can't log in).
+  // When unset, channel requests are allowed without a key (local dev stub).
+  channelApiKey: process.env.CHANNEL_API_KEY ?? "",
+
   // --- VAPI (voice telephony via Custom LLM) ---
   // Bearer token VAPI sends on POST /v1/chat/completions. When unset, the
   // endpoint is open (fine for local dev behind ngrok).

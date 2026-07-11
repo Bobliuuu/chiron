@@ -9,6 +9,8 @@ export const env = {
   accessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? "",
   phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
   appSecret: process.env.WHATSAPP_APP_SECRET ?? "",
+  /** Shared secret sent as x-channel-key to the backend's /api/chat. */
+  channelApiKey: process.env.CHANNEL_API_KEY ?? "",
   /** Max conversation turns kept per WhatsApp user (matches backend cap). */
   sessionMaxMessages: 20,
 };

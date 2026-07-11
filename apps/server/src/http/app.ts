@@ -30,7 +30,7 @@ import { upsertEventRegistration } from "../data/event-registrations";
 import { getProfile, upsertProfile } from "../data/profiles";
 import { tagEvent } from "../pipeline/tag-event";
 import { uploadEventImage } from "../data/storage";
-import { requireAuth, type AuthVariables } from "./auth";
+import { requireAuth, requireUserOrChannelKey, type AuthVariables } from "./auth";
 import { vapiAuth } from "../vapi/auth";
 import { handleChatCompletions } from "../vapi/adapter";
 
@@ -81,7 +81,7 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
   }
 
   // POST /api/chat  { channel, messages }  ->  AgentResult
-  app.post("/api/chat", requireAuth, async (c) => {
+  app.post("/api/chat", requireUserOrChannelKey, async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
