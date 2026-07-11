@@ -37,11 +37,13 @@ import { getProfile, upsertProfile } from "../data/profiles";
 import {
   deleteEventRegistration,
   getEventRegistration,
+  registrationsByEvent,
   registrationsByProfile,
   updateEventRegistration,
   upsertEventRegistration,
   type EventRegistrationPatch,
 } from "../data/event-registrations";
+import { describeAudience, summarizeAudience } from "../data/analytics";
 import { tagEvent } from "../pipeline/tag-event";
 import { uploadEventImage } from "../data/storage";
 import { requireAuth, requireUserOrChannelKey, type AuthVariables } from "./auth";
@@ -377,6 +379,69 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
     }
   });
 
+  // GET /api/events/:id/analytics -> attendee counts + audience summary for
+  // an event the caller created. Profiles that opted out of sharing are
+  // excluded from the summary but counted in opted_out.
+  app.get("/api/events/:id/analytics", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    if (!id || !isUuid(id)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    try {
+      const event = await getEvent(id);
+      if (!event) return c.json({ error: "Event not found." }, 404);
+      if (event.created_by !== c.get("authUser").id) {
+        return c.json(
+          { error: "Only the event creator can view its analytics." },
+          403,
+        );
+      }
+
+      const registrations = await registrationsByEvent(id);
+      const statusCounts = { interested: 0, registered: 0 };
+      const attendeeProfiles: {
+        preferred_tags: string[];
+        accessibility_needs: string[];
+      }[] = [];
+      let optedOut = 0;
+
+      for (const r of registrations) {
+        if (r.status === "interested") statusCounts.interested++;
+        else if (r.status === "registered") statusCounts.registered++;
+
+        const profile = await getProfile(r.profile_id);
+        if (!profile || !profile.share_in_analytics) {
+          optedOut++;
+          continue;
+        }
+        attendeeProfiles.push({
+          preferred_tags: profile.preferred_tags,
+          accessibility_needs: profile.accessibility_needs,
+        });
+      }
+
+      const mix = summarizeAudience(
+        attendeeProfiles,
+        registrations.length,
+      );
+      const summary = describeAudience({
+        ...mix,
+        opted_out: optedOut,
+      });
+
+      return c.json({
+        total: registrations.length,
+        status_counts: statusCounts,
+        audience: mix,
+        summary,
+      });
+    } catch (err) {
+      console.error("[/api/events/:id/analytics GET] error:", err);
+      return c.json({ error: "Failed to load analytics." }, 500);
+    }
+  });
+
   // GET /api/my/registrations -> the signed-in user's registrations.
   app.get("/api/my/registrations", requireAuth, async (c) => {
     try {
@@ -533,6 +598,40 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
     } catch (err) {
       console.error("[/api/profile POST] error:", err);
       return c.json({ error: "Failed to save profile." }, 500);
+    }
+  });
+
+  // PATCH /api/profile -> partial update of profile prefs (currently only the
+  // privacy toggle). Avoids forcing a full quiz re-derive just to flip a flag.
+  app.patch("/api/profile", requireAuth, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+    const b = (body ?? {}) as Record<string, unknown>;
+    if (typeof b.share_in_analytics !== "boolean") {
+      return c.json(
+        { error: "Only the share_in_analytics flag can be patched." },
+        400,
+      );
+    }
+
+    const authId = c.get("authUser").id;
+    try {
+      const existing = await getProfile(authId);
+      if (!existing) {
+        return c.json({ error: "Profile not found." }, 404);
+      }
+      const updated = await upsertProfile({
+        ...existing,
+        share_in_analytics: b.share_in_analytics,
+      });
+      return c.json({ profile: updated });
+    } catch (err) {
+      console.error("[/api/profile PATCH] error:", err);
+      return c.json({ error: "Failed to update profile." }, 500);
     }
   });
 

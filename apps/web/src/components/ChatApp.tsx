@@ -266,11 +266,11 @@ export function ChatApp() {
             <button
               type="button"
               onClick={() => setProfileOpen(true)}
-              aria-label="Open your profile"
-              title="Your profile"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700"
+              aria-label="Open settings"
+              title="Settings"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700"
             >
-              {(user?.email?.[0] ?? "U").toUpperCase()}
+              <SettingsIcon />
             </button>
             <button
               type="button"
@@ -330,6 +330,30 @@ export function ChatApp() {
         />
       </div>
     </div>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className="h-4 w-4"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.4 12.4a6.7 6.7 0 0 0 0-4.8l1.6-1.3-1.5-2.6-2 .7a6.7 6.7 0 0 0-4.1-2.4l-.3-2H9.9l-.3 2a6.7 6.7 0 0 0-4.1 2.4l-2-.7L1.9 6.3l1.6 1.3a6.7 6.7 0 0 0 0 4.8L1.9 13.7l1.5 2.6 2-.7a6.7 6.7 0 0 0 4.1 2.4l.3 2h3.2l.3-2a6.7 6.7 0 0 0 4.1-2.4l2 .7 1.5-2.6-1.5-1.3Z"
+      />
+    </svg>
   );
 }
 

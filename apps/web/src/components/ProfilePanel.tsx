@@ -12,13 +12,18 @@ import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { EventCreateForm } from "@/components/EventCreateForm";
 
-// The profile panel, opened from the header avatar. Three tabs:
-//   My events — events the user published; each can be edited in place.
-//   Joining   — the user's registrations; edit status/notes or cancel.
+// The settings panel, opened from the header gear icon. Four tabs:
+//   My events   — events the user published; each can be edited or deleted.
+//   Joining     — the user's registrations; edit status/notes or cancel.
+//   Analytics   — for each of the user's events, who's attending + an
+//                 aggregated audience summary (only profiles that opted in
+//                 to share their quiz-derived tags are folded in).
 //   Preferences — the onboarding quiz answers, editable; saving re-derives
 //                 the profile (ui_mode, tags) exactly like onboarding did.
+//                 Privacy toggle lives here: opting out excludes this user's
+//                 tags from any event-creator's analytics summary.
 
-type Tab = "events" | "joining" | "preferences";
+type Tab = "events" | "joining" | "analytics" | "preferences";
 
 interface Props {
   profile: Profile | null;
@@ -49,10 +54,10 @@ export function ProfilePanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Your profile</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Settings</h2>
           <button
             onClick={onClose}
-            aria-label="Close profile"
+            aria-label="Close settings"
             className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           >
             ✕
@@ -67,6 +72,12 @@ export function ProfilePanel({
             Joining
           </TabButton>
           <TabButton
+            active={tab === "analytics"}
+            onClick={() => setTab("analytics")}
+          >
+            Analytics
+          </TabButton>
+          <TabButton
             active={tab === "preferences"}
             onClick={() => setTab("preferences")}
           >
@@ -77,6 +88,7 @@ export function ProfilePanel({
         <div className="flex-1 overflow-y-auto p-5">
           {tab === "events" && <MyEventsTab onEventsChanged={onEventsChanged} />}
           {tab === "joining" && <JoiningTab />}
+          {tab === "analytics" && <AnalyticsTab />}
           {tab === "preferences" && (
             <PreferencesTab profile={profile} onProfileUpdated={onProfileUpdated} />
           )}
@@ -329,6 +341,141 @@ function JoiningTab() {
   );
 }
 
+// --- Analytics -----------------------------------------------------------------
+
+// Per-event analytics for events the current user published. Shows raw
+// attendee counts + a server-built audience summary, which is itself
+// derived only from profiles that opted in to share their quiz tags.
+
+interface EventAnalytics {
+  total: number;
+  status_counts: { interested: number; registered: number };
+  audience: {
+    preferred_tags: Record<string, number>;
+    accessibility_needs: Record<string, number>;
+    opted_in: number;
+    opted_out: number;
+  };
+  summary: string;
+}
+
+function AnalyticsTab() {
+  const { authFetch } = useAuth();
+  const [events, setEvents] = useState<PublicEvent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await authFetch(apiUrl("/api/my/events"));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error);
+      setEvents(data.events as PublicEvent[]);
+    } catch {
+      setError("Could not load your events.");
+      setEvents([]);
+    }
+  }, [authFetch]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (events === null) return <Loading />;
+  if (events.length === 0) {
+    return (
+      <p className="text-sm text-slate-500">
+        Once you publish an event, attendance and audience insights will show up
+        here.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {events.map((event) => (
+        <EventAnalyticsCard key={event.id} event={event} />
+      ))}
+    </ul>
+  );
+}
+
+function EventAnalyticsCard({ event }: { event: PublicEvent }) {
+  const { authFetch } = useAuth();
+  const [analytics, setAnalytics] = useState<EventAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await authFetch(apiUrl(`/api/events/${event.id}/analytics`));
+        const data = await res.json();
+        if (!cancelled && res.ok) {
+          setAnalytics(data as EventAnalytics);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, event.id]);
+
+  const total = analytics?.total ?? 0;
+  const interested = analytics?.status_counts.interested ?? 0;
+  const registered = analytics?.status_counts.registered ?? 0;
+  const optedOut = analytics?.audience.opted_out ?? 0;
+
+  return (
+    <li className="rounded-xl border border-slate-200 p-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-900">
+          {event.title}
+        </p>
+        <p className="text-xs text-slate-500">
+          {formatDateTime(event.start_time)}
+          {event.city ? ` · ${event.city}` : ""}
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="mt-2 text-sm text-slate-400">Loading analytics…</p>
+      ) : total === 0 ? (
+        <p className="mt-2 text-sm text-slate-500">
+          No one has signed up yet.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+            <span>
+              <strong className="font-semibold text-slate-900">{total}</strong>{" "}
+              attendee{total === 1 ? "" : "s"}
+            </span>
+            <span className="text-slate-400">·</span>
+            <span>{registered} registered</span>
+            <span className="text-slate-400">·</span>
+            <span>{interested} interested</span>
+            {optedOut > 0 && (
+              <>
+                <span className="text-slate-400">·</span>
+                <span className="text-slate-500">
+                  {optedOut} opted out of sharing
+                </span>
+              </>
+            )}
+          </div>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {analytics?.summary}
+          </p>
+        </div>
+      )}
+    </li>
+  );
+}
+
 // --- Preferences ----------------------------------------------------------------
 
 function PreferencesTab({
@@ -341,6 +488,9 @@ function PreferencesTab({
   const { authFetch, user } = useAuth();
   const [answers, setAnswers] = useState<Record<string, boolean>>(
     () => profile?.quiz_answers ?? {},
+  );
+  const [shareInAnalytics, setShareInAnalytics] = useState<boolean>(
+    () => profile?.share_in_analytics ?? true,
   );
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -361,6 +511,24 @@ function PreferencesTab({
       setStatus("saved");
     } catch {
       setStatus("error");
+    }
+  }
+
+  async function togglePrivacy(next: boolean) {
+    if (!user?.id) return;
+    setShareInAnalytics(next);
+    try {
+      const res = await authFetch(apiUrl("/api/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ share_in_analytics: next }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.profile) throw new Error(data?.error);
+      onProfileUpdated(data.profile as Profile);
+    } catch {
+      // revert on failure so the toggle reflects reality
+      setShareInAnalytics(!next);
     }
   }
 
@@ -434,6 +602,35 @@ function PreferencesTab({
         {status === "error" && (
           <span className="text-sm text-red-600">Could not save. Try again.</span>
         )}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-slate-200 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Privacy</p>
+            <p className="text-xs text-slate-500">
+              When enabled, your quiz-derived tags may be aggregated into
+              audience summaries shown to event creators. Turning this off keeps
+              your tags private but means your preferences won&apos;t appear in
+              analytics.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={shareInAnalytics}
+            onClick={() => void togglePrivacy(!shareInAnalytics)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              shareInAnalytics ? "bg-brand-600" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                shareInAnalytics ? "translate-x-5" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
       </div>
     </div>
   );

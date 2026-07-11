@@ -85,6 +85,27 @@ export async function registrationsByProfile(
   return (data ?? []) as EventRegistration[];
 }
 
+/** All registrations for one event, newest first. Owner-side analytics. */
+export async function registrationsByEvent(
+  eventId: string,
+): Promise<EventRegistration[]> {
+  const db = getSupabaseAdmin();
+  if (!db) {
+    return [...mockRegistrations.values()]
+      .filter((r) => r.event_id === eventId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  const { data, error } = await db
+    .from(TABLE)
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`registrationsByEvent failed: ${error.message}`);
+  return (data ?? []) as EventRegistration[];
+}
+
 export async function getEventRegistration(
   id: string,
 ): Promise<EventRegistration | null> {

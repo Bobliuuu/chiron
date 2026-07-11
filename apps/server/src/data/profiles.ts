@@ -16,6 +16,7 @@ export async function upsertProfile(input: ProfileInput): Promise<Profile> {
     const profile: Profile = {
       ...input,
       city: input.city ?? null,
+      share_in_analytics: input.share_in_analytics ?? true,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };
@@ -34,6 +35,7 @@ export async function upsertProfile(input: ProfileInput): Promise<Profile> {
         city: input.city ?? null,
         free_only: input.free_only,
         quiz_answers: input.quiz_answers,
+        share_in_analytics: input.share_in_analytics ?? true,
       },
       { onConflict: "id" },
     )

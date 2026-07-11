@@ -149,6 +149,12 @@ create table public.profiles (
   -- re-derived if the mapping changes, and edited in the Preferences tab.
   quiz_answers        jsonb   not null default '{}'::jsonb,
 
+  -- Privacy: when true, this profile's quiz-derived tags can be aggregated
+  -- into analytics summaries shown to event creators (e.g. "audience mix").
+  -- Defaults on so existing opt-in behavior holds; users can flip it off in
+  -- the Settings panel.
+  share_in_analytics  boolean not null default true,
+
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );

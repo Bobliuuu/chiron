@@ -20,6 +20,12 @@ export interface Profile {
   free_only: boolean;
   /** Raw quiz answers by question id, so prefs can be re-derived later. */
   quiz_answers: Record<string, boolean>;
+  /**
+   * Privacy: when true, this profile's quiz-derived tags may be aggregated
+   * into audience summaries shown to event creators. Flipped off in
+   * Settings → Preferences → Privacy.
+   */
+  share_in_analytics: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +38,7 @@ export interface ProfileInput {
   city?: string | null;
   free_only: boolean;
   quiz_answers: Record<string, boolean>;
+  share_in_analytics?: boolean;
 }
 
 /** The slice of the profile the chat agent needs for personalization. */
