@@ -1,14 +1,21 @@
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.js
 
 # next.js
-/.next/
+.next/
 /out/
 
 # production
 /build
+# build output
+dist/
+*.tsbuildinfo
+
+# deploy secrets (Cloudflare Origin Certificate)
+/deploy/certs/*
+!/deploy/certs/.gitkeep
 
 # misc
 .DS_Store
