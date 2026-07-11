@@ -9,6 +9,7 @@ import {
   type UiAction,
 } from "@chiron/shared";
 import { dbMode } from "../config";
+import { logVerbose } from "../log";
 import { getLlmClient, type LlmClient } from "./llm";
 import { systemPrompt } from "./prompts";
 import { toolsFor, executeTool } from "./tools";
@@ -32,8 +33,12 @@ export async function runAgent(req: AgentRequest): Promise<AgentResult> {
   const caps = capabilitiesFor(req.channel);
   const llm = getLlmClient();
 
-  if (!llm) return mockResult(req.messages, req.channel, caps);
+  if (!llm) {
+    logVerbose("agent", "using mock planner (no live LLM configured)");
+    return mockResult(req.messages, req.channel, caps);
+  }
 
+  logVerbose("agent", `using ${llm.provider} model=${llm.model}`);
   try {
     return await runWithModel(llm, req.messages, req.channel, caps);
   } catch (err) {
@@ -62,6 +67,8 @@ async function runWithModel(
   const actions: UiAction[] = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const started = Date.now();
+    logVerbose("agent", `llm round ${round + 1}/${MAX_TOOL_ROUNDS}…`);
     const completion = await llm.client.chat.completions.create({
       model: llm.model,
       messages,
@@ -71,6 +78,7 @@ async function runWithModel(
     });
 
     const choice = completion.choices[0]?.message;
+    logVerbose("agent", `llm round ${round + 1} done in ${Date.now() - started}ms`);
     if (!choice) break;
 
     // No tool calls → final answer.

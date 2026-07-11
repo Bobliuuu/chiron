@@ -8,6 +8,9 @@ export const env = {
   // --- HTTP server ---
   // Port the standalone backend listens on (Cloudflare origin fronts this).
   port: Number(process.env.PORT || 8787),
+  // Log every request + agent/LLM steps to stdout (great for local debugging).
+  verboseLogging:
+    (process.env.VERBOSE_LOGGING || "").toLowerCase() === "true",
   // Comma-separated list of browser origins allowed to call this API via CORS.
   // e.g. "https://chiron.example,http://localhost:3000". "*" allows any origin.
   allowedOrigins: (process.env.ALLOWED_ORIGINS || "*")

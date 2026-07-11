@@ -9,6 +9,7 @@ import {
   type EventInput,
 } from "@chiron/shared";
 import { env, currentMode as mode } from "../config";
+import { logVerbose } from "../log";
 import { runAgent } from "../agent/orchestrator";
 import { createEvent, upcomingEvents } from "../data/events";
 import { vapiAuth } from "../vapi/auth";
@@ -21,15 +22,29 @@ import { handleChatCompletions } from "../vapi/adapter";
 export function createApp(): Hono {
   const app = new Hono();
 
-  // CORS: browsers (the web app) call this cross-origin. Server-to-server
-  // callers (voice/whatsapp) are unaffected. Origins come from ALLOWED_ORIGINS.
+  app.use("*", async (c, next) => {
+    const started = Date.now();
+    const { method } = c.req;
+    const path = c.req.path;
+    logVerbose(
+      "http",
+      `--> ${method} ${path}`,
+      `origin=${c.req.header("origin") ?? "-"}`,
+      `ip=${c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "-"}`,
+    );
+    await next();
+    logVerbose("http", `<-- ${method} ${path} ${c.res.status} ${Date.now() - started}ms`);
+  });
+
+  // CORS: browsers (the web app) call this cross-origin when not using the
+  // Next.js dev proxy. Server-to-server callers (voice/whatsapp) are unaffected.
   const allowAny = env.allowedOrigins.includes("*");
   app.use(
-    "/api/*",
+    "*",
     cors({
       origin: allowAny ? "*" : env.allowedOrigins,
       allowMethods: ["GET", "POST", "OPTIONS"],
-      allowHeaders: ["Content-Type"],
+      allowHeaders: ["Content-Type", "Authorization"],
     }),
   );
 
@@ -58,8 +73,20 @@ export function createApp(): Hono {
       return c.json({ error: "No messages provided." }, 400);
     }
 
+    logVerbose(
+      "chat",
+      `channel=${channel} messages=${messages.length}`,
+      `last="${truncate(messages.at(-1)?.content ?? "", 120)}"`,
+    );
+
     try {
+      const started = Date.now();
       const result = await runAgent({ channel, messages });
+      logVerbose(
+        "chat",
+        `done in ${Date.now() - started}ms`,
+        `llm=${result.mode.llm} actions=${result.actions.length}`,
+      );
       return c.json(result);
     } catch (err) {
       console.error("[/api/chat] agent error:", err);
@@ -183,4 +210,8 @@ function asCategory(v: unknown): EventCategory {
     (EVENT_CATEGORIES as readonly string[]).includes(v)
     ? (v as EventCategory)
     : "other";
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
 }

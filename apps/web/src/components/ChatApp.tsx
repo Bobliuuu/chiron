@@ -5,7 +5,7 @@ import type { AgentResult, EventRecord } from "@chiron/shared";
 import { ChatMessageView, type UiMessage } from "@/components/ChatMessage";
 import { Composer } from "@/components/Composer";
 import { EventsPanel } from "@/components/EventsPanel";
-import { apiUrl, CHANNEL } from "@/lib/api";
+import { apiUrl, API_URL, CHANNEL, logApi } from "@/lib/api";
 
 const SUGGESTIONS = [
   "Find all events in Markham for food banks",
@@ -32,6 +32,8 @@ export function ChatApp() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    logApi("API_URL =", API_URL);
+    void probeBackend();
     void refreshEvents();
   }, []);
 
@@ -42,13 +44,36 @@ export function ChatApp() {
     });
   }, [messages]);
 
+  async function probeBackend() {
+    const url = apiUrl("/health");
+    const started = Date.now();
+    logApi("GET", url, "(startup health check)");
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      logApi("GET", url, "->", res.status, data, `${Date.now() - started}ms`);
+    } catch (err) {
+      console.error(
+        "[chiron-web] Backend unreachable at",
+        API_URL,
+        `after ${Date.now() - started}ms:`,
+        err,
+      );
+    }
+  }
+
   async function refreshEvents() {
     setEventsLoading(true);
+    const url = apiUrl("/api/events");
+    const started = Date.now();
+    logApi("GET", url);
     try {
-      const res = await fetch(apiUrl("/api/events"));
+      const res = await fetch(url);
+      logApi("GET", url, "->", res.status, `${Date.now() - started}ms`);
       const data = await res.json();
       setEvents(Array.isArray(data.events) ? data.events : []);
-    } catch {
+    } catch (err) {
+      console.error("[chiron-web] GET /api/events failed:", err);
       setEvents([]);
     } finally {
       setEventsLoading(false);
@@ -69,8 +94,16 @@ export function ChatApp() {
     const history = [...messages, userMsg];
     setMessages([...history, pendingMsg]);
 
+    const url = apiUrl("/api/chat");
+    const started = Date.now();
+    logApi("POST", url, {
+      channel: CHANNEL,
+      messageCount: history.length,
+      lastMessage: text,
+    });
+
     try {
-      const res = await fetch(apiUrl("/api/chat"), {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -78,7 +111,13 @@ export function ChatApp() {
           messages: history.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
+      logApi("POST", url, "->", res.status, `${Date.now() - started}ms`);
       const data = (await res.json()) as AgentResult & { error?: string };
+      logApi("POST", url, "response", {
+        mode: data.mode,
+        actions: data.actions?.length ?? 0,
+        error: data.error,
+      });
 
       const assistant: UiMessage = {
         id: pendingMsg.id,
@@ -92,7 +131,13 @@ export function ChatApp() {
         prev.map((m) => (m.id === pendingMsg.id ? assistant : m)),
       );
       if (data.mode) setMode(data.mode);
-    } catch {
+    } catch (err) {
+      console.error(
+        "[chiron-web] POST /api/chat failed:",
+        url,
+        `after ${Date.now() - started}ms:`,
+        err,
+      );
       setMessages((prev) =>
         prev.map((m) =>
           m.id === pendingMsg.id
