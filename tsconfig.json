@@ -1,0 +1,9 @@
+{
+  "extends": "./apps/server/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["scripts/**/*.ts", "apps/server/src/**/*.ts", "packages/shared/src/**/*.ts"],
+  "exclude": ["node_modules", "apps/web", "apps/whatsapp", ".next", "dist"]
+}

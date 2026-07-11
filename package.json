@@ -15,7 +15,8 @@
     "build": "npm run build --workspace @chiron/server && npm run build --workspace @chiron/web && npm run build --workspace @chiron/whatsapp",
     "start:server": "npm run start --workspace @chiron/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspace @chiron/web"
+    "lint": "npm run lint --workspace @chiron/web",
+    "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "resend": "^6.17.2"
