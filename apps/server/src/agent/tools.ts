@@ -1,9 +1,16 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import { createEvent, getEvent, searchEvents, topEvents } from "../data/events";
+import { appendLearnedFacts } from "../data/profiles";
 import { tagEvent } from "../pipeline/tag-event";
+import { callEventOrganizer } from "../vapi/outbound";
 import {
   EVENT_CATEGORIES,
+  EVENT_CREATE_FIELDS,
+  FACT_PREDICATES,
   STATIC_TAGS,
+  aiFillableFieldIds,
+  buildToolParameters,
+  isFactPredicate,
   sanitizeStaticTags,
   toPublicEvent,
   type ChannelCapabilities,
@@ -11,6 +18,7 @@ import {
   type EventDraft,
   type EventInput,
   type EventRecord,
+  type FactPredicate,
   type UiAction,
 } from "@chiron/shared";
 
@@ -24,6 +32,21 @@ export interface ToolOutcome {
   /** Cards to render in the chat UI. */
   actions: UiAction[];
 }
+
+// create_event advertises the same fields as the create form (from
+// EVENT_CREATE_FIELDS) plus a `confirmed` publish gate.
+const CREATE_EVENT_PARAMS = {
+  type: "object" as const,
+  properties: {
+    confirmed: {
+      type: "boolean",
+      description:
+        "Must be true — only set after the user explicitly agrees to publish.",
+    },
+    ...buildToolParameters(EVENT_CREATE_FIELDS).properties,
+  },
+  required: ["confirmed", "title", "summary", "start_time"],
+};
 
 export const toolDefinitions: ChatCompletionTool[] = [
   {
@@ -126,38 +149,88 @@ export const toolDefinitions: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "draft_event",
+      name: "register_event",
       description:
-        "Prepare a prefilled event-creation form from what the user described. Does NOT publish — it surfaces a draft the nonprofit reviews and submits. Fill only the fields the user actually provided.",
+        "Register / RSVP a community member for an event they've chosen. Pass the id of an event from a prior search or recommendation. On the web this surfaces a prefilled registration form the user completes and submits; on voice/text it returns how to sign up (external link or instructions) for you to relay. Call this when the user says they want to attend, join, sign up for, or register for a specific event.",
       parameters: {
         type: "object",
         properties: {
-          title: { type: "string" },
-          summary: { type: "string", description: "Plain-language one-liner." },
-          description: { type: "string" },
-          category: {
+          event_id: {
             type: "string",
-            enum: EVENT_CATEGORIES as unknown as string[],
+            description:
+              "Id of the event to register for (from search/recommendation results).",
           },
-          start_time: {
-            type: "string",
-            description: "ISO 8601 start date-time.",
-          },
-          end_time: { type: "string", description: "ISO 8601 end date-time." },
-          is_online: { type: "boolean" },
-          online_url: { type: "string" },
-          location_name: { type: "string" },
-          address: { type: "string" },
-          city: { type: "string" },
-          is_free: { type: "boolean" },
-          cost_note: { type: "string" },
-          audience: { type: "string" },
-          accessibility: { type: "array", items: { type: "string" } },
-          transportation: { type: "string" },
-          registration_url: { type: "string" },
-          registration_instructions: { type: "string" },
-          host_organization: { type: "string" },
         },
+        required: ["event_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "remember_user_fact",
+      description:
+        "Persist a durable fact about THIS user to their long-term profile so it improves future recommendations and is not re-asked in later sessions. Call this whenever the user reveals a lasting preference, constraint, interest, or context — e.g. 'I prefer weekend events', 'I always bring my kids', 'I can't do loud places', 'I'm into gardening'. Do NOT use it for one-off, in-the-moment requests (e.g. 'find something this Friday'). Record one clear fact per call.",
+      parameters: {
+        type: "object",
+        properties: {
+          predicate: {
+            type: "string",
+            enum: FACT_PREDICATES as unknown as string[],
+            description:
+              "The kind of fact: prefers_tag/avoids_tag (topics), interest, preferred_day, preferred_city, travels_with, budget, or note for anything else.",
+          },
+          object: {
+            type: "string",
+            description:
+              "The value, in a few words (e.g. 'weekends', 'kids', 'gardening', 'Scarborough').",
+          },
+          confidence: {
+            type: "number",
+            description:
+              "0–1. Use ~0.9 when the user stated it explicitly, lower when inferred.",
+          },
+        },
+        required: ["predicate", "object"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "draft_event",
+      description:
+        "Prepare a prefilled event-creation form from what the user described. Does NOT publish — it surfaces a draft the nonprofit reviews and submits. Fill only the fields the user actually provided.",
+      // Generated from EVENT_CREATE_FIELDS so the agent's draft can never drift
+      // from the real EventCreateForm the nonprofit fills in.
+      parameters: buildToolParameters(EVENT_CREATE_FIELDS),
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "call_event_organizer",
+      description:
+        "Place an outbound phone call to an event organizer to ask questions on the caller's behalf. Use when the caller wants to contact or ask questions to event organizers. Requires the event id and a list of questions. The caller must be identified first (ask for their full name if not authenticated).",
+      parameters: {
+        type: "object",
+        properties: {
+          event_id: {
+            type: "string",
+            description: "Id of the event whose organizer should be called.",
+          },
+          questions: {
+            type: "array",
+            items: { type: "string" },
+            description: "Questions to ask the organizer, in order.",
+          },
+          caller_name: {
+            type: "string",
+            description:
+              "Authenticated caller's full name, if known from the voice session.",
+          },
+        },
+        required: ["event_id", "questions"],
       },
     },
   },
@@ -167,58 +240,34 @@ export const toolDefinitions: ChatCompletionTool[] = [
       name: "create_event",
       description:
         "Publish a new community event to the database. ONLY call after reading back all details and receiving explicit verbal confirmation from the user. Requires title, summary, and start_time.",
-      parameters: {
-        type: "object",
-        properties: {
-          confirmed: {
-            type: "boolean",
-            description:
-              "Must be true — only set after the user explicitly agrees to publish.",
-          },
-          title: { type: "string" },
-          summary: { type: "string", description: "Plain-language one-liner." },
-          description: { type: "string" },
-          category: {
-            type: "string",
-            enum: EVENT_CATEGORIES as unknown as string[],
-          },
-          start_time: {
-            type: "string",
-            description: "ISO 8601 start date-time.",
-          },
-          end_time: { type: "string", description: "ISO 8601 end date-time." },
-          is_online: { type: "boolean" },
-          online_url: { type: "string" },
-          location_name: { type: "string" },
-          address: { type: "string" },
-          city: { type: "string" },
-          is_free: { type: "boolean" },
-          cost_note: { type: "string" },
-          audience: { type: "string" },
-          accessibility: { type: "array", items: { type: "string" } },
-          transportation: { type: "string" },
-          registration_url: { type: "string" },
-          registration_instructions: { type: "string" },
-          host_organization: { type: "string" },
-        },
-        required: ["confirmed", "title", "summary", "start_time"],
-      },
+      parameters: CREATE_EVENT_PARAMS,
     },
   },
 ];
 
 /**
  * Rich-UI channels get draft_event (prefilled form). Prose-only channels get
- * create_event (publish after verbal confirmation) instead.
+ * create_event (publish after verbal confirmation). Voice gets organizer calls.
  */
 export function toolsFor(caps: ChannelCapabilities): ChatCompletionTool[] {
-  const excluded = caps.richUi ? "create_event" : "draft_event";
-  return toolDefinitions.filter((t) => t.function.name !== excluded);
+  const excluded = new Set<string>();
+  if (caps.richUi) excluded.add("create_event");
+  else excluded.add("draft_event");
+  if (!caps.voiceTelephony) excluded.add("call_event_organizer");
+  if (!caps.richUi) excluded.add("show_events");
+  return toolDefinitions.filter((t) => !excluded.has(t.function.name));
+}
+
+/** Per-request context available to tool executors (e.g. who is calling). */
+export interface ToolContext {
+  /** The authenticated user's profile id, when known — required to persist memory. */
+  profileId?: string | null;
 }
 
 export async function executeTool(
   name: string,
   args: Record<string, unknown>,
+  ctx: ToolContext = {},
 ): Promise<ToolOutcome> {
   switch (name) {
     case "search_events":
@@ -227,10 +276,16 @@ export async function executeTool(
       return runTopEvents(args);
     case "show_events":
       return runShowEvents(args);
+    case "register_event":
+      return runRegister(args);
+    case "remember_user_fact":
+      return runRemember(args, ctx);
     case "draft_event":
       return runDraft(args);
     case "create_event":
       return runCreate(args);
+    case "call_event_organizer":
+      return runCallOrganizer(args);
     default:
       return { forModel: JSON.stringify({ error: `unknown tool ${name}` }), actions: [] };
   }
@@ -285,29 +340,118 @@ async function runTopEvents(args: Record<string, unknown>): Promise<ToolOutcome>
   };
 }
 
+async function runRegister(args: Record<string, unknown>): Promise<ToolOutcome> {
+  const eventId = str(args.event_id);
+  if (!eventId) {
+    return {
+      forModel: JSON.stringify({
+        ok: false,
+        error:
+          "event_id is required. First find the event (search/recommend), then register with its id.",
+      }),
+      actions: [],
+    };
+  }
+
+  const event = await getEvent(eventId);
+  if (!event) {
+    return {
+      forModel: JSON.stringify({ ok: false, error: "Event not found." }),
+      actions: [],
+    };
+  }
+
+  // Rich UI: surface the prefilled registration form (the client submits it
+  // with its own auth + profile id, mirroring the draft_event flow). Prose
+  // channels drop the action in finalize(), so the model relays the signup
+  // details from `forModel` instead.
+  const pub = toPublicEvent(event);
+  return {
+    forModel: JSON.stringify({
+      ok: true,
+      event: {
+        id: pub.id,
+        title: pub.title,
+        start_time: pub.start_time,
+        city: pub.city,
+        is_free: pub.is_free,
+        cost_note: pub.cost_note,
+        registration_url: pub.registration_url,
+        registration_instructions: pub.registration_instructions,
+      },
+      note: "On web the registration form is now shown below for the user to complete — tell them it's ready. On voice/text there is no form: read out registration_url or registration_instructions if present; otherwise say you've noted their interest and someone will follow up.",
+    }),
+    actions: [{ type: "event_registration", event: pub }],
+  };
+}
+
+async function runRemember(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolOutcome> {
+  const predicate = isFactPredicate(args.predicate)
+    ? (args.predicate as FactPredicate)
+    : null;
+  const object = str(args.object);
+  if (!predicate || !object) {
+    return {
+      forModel: JSON.stringify({
+        remembered: false,
+        error:
+          "Provide a valid predicate (from the allowed set) and a non-empty object.",
+      }),
+      actions: [],
+    };
+  }
+
+  const confidence = num(args.confidence);
+  if (!ctx.profileId) {
+    // No signed-in profile to attach memory to (e.g. an unauthenticated
+    // channel). Acknowledge so the model can still use it this turn.
+    return {
+      forModel: JSON.stringify({
+        remembered: false,
+        persisted: false,
+        note: "No user profile on this session, so I can't store it long-term — I'll keep it in mind for now.",
+      }),
+      actions: [],
+    };
+  }
+
+  try {
+    const updated = await appendLearnedFacts(ctx.profileId, [
+      {
+        predicate,
+        object,
+        source: "conversation",
+        confidence:
+          typeof confidence === "number" ? Math.max(0, Math.min(1, confidence)) : 0.9,
+      },
+    ]);
+    return {
+      forModel: JSON.stringify({
+        remembered: Boolean(updated),
+        persisted: Boolean(updated),
+        fact: { predicate, object },
+      }),
+      actions: [],
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to remember.";
+    return {
+      forModel: JSON.stringify({ remembered: false, error: message }),
+      actions: [],
+    };
+  }
+}
+
 async function runDraft(args: Record<string, unknown>): Promise<ToolOutcome> {
-  // Pass through only recognized fields.
+  // Pass through only recognized fields — the allow-list is the create-form
+  // template, so a field added to the form flows here automatically.
   const draft: EventDraft = {};
-  const keys: (keyof EventDraft)[] = [
-    "title",
-    "summary",
-    "description",
-    "category",
-    "start_time",
-    "end_time",
-    "is_online",
-    "online_url",
-    "location_name",
-    "address",
-    "city",
-    "is_free",
-    "cost_note",
-    "audience",
-    "transportation",
-    "registration_url",
-    "registration_instructions",
-    "host_organization",
-  ];
+  const keys = aiFillableFieldIds(EVENT_CREATE_FIELDS).filter(
+    (k) => k !== "accessibility",
+  );
   for (const k of keys) {
     if (args[k] !== undefined && args[k] !== null && args[k] !== "") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -390,6 +534,71 @@ async function runCreate(args: Record<string, unknown>): Promise<ToolOutcome> {
   }
 }
 
+async function runCallOrganizer(
+  args: Record<string, unknown>,
+): Promise<ToolOutcome> {
+  const eventId = str(args.event_id);
+  const questions = Array.isArray(args.questions)
+    ? args.questions.map(String).filter((q) => q.trim())
+    : [];
+
+  if (!eventId) {
+    return {
+      forModel: JSON.stringify({ placed: false, error: "event_id is required." }),
+      actions: [],
+    };
+  }
+  if (questions.length === 0) {
+    return {
+      forModel: JSON.stringify({
+        placed: false,
+        error: "At least one question is required.",
+      }),
+      actions: [],
+    };
+  }
+
+  const event = await getEvent(eventId);
+  if (!event) {
+    return {
+      forModel: JSON.stringify({ placed: false, error: "Event not found." }),
+      actions: [],
+    };
+  }
+
+  const organizerName = event.organizer_name ?? event.host_organization;
+  const organizerPhone = event.organizer_phone;
+  if (!organizerName || !organizerPhone) {
+    return {
+      forModel: JSON.stringify({
+        placed: false,
+        error: "This event has no organizer phone number on file.",
+      }),
+      actions: [],
+    };
+  }
+
+  const result = await callEventOrganizer({
+    organizerName,
+    organizerPhone,
+    eventTitle: event.title,
+    questions,
+    callerName: str(args.caller_name),
+  });
+
+  return {
+    forModel: JSON.stringify({
+      placed: result.placed,
+      call_id: result.callId,
+      mock: result.mock ?? false,
+      organizer: organizerName,
+      event_title: event.title,
+      error: result.error,
+    }),
+    actions: [],
+  };
+}
+
 function buildEventInput(
   args: Record<string, unknown>,
 ): { input: EventInput } | { error: string } {
@@ -452,6 +661,8 @@ function brief(e: EventRecord) {
     city: e.city,
     is_free: e.is_free,
     accessibility: e.accessibility,
+    organizer_name: e.organizer_name,
+    organizer_phone: e.organizer_phone ? "(on file)" : null,
   };
 }
 

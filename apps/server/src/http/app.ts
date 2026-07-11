@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import {
   asChannel,
@@ -27,12 +27,28 @@ import {
   upsertEventRegistrationForm,
 } from "../data/event-registration-forms";
 import { upsertEventRegistration } from "../data/event-registrations";
-import { getProfile, upsertProfile } from "../data/profiles";
+import {
+  authenticate,
+  createSession,
+  createUser,
+  deleteSession,
+} from "../data/users";
+import {
+  appendVoiceOntology,
+  findProfileByFullName,
+  getProfile,
+  toAgentProfile,
+  upsertProfile,
+} from "../data/profiles";
 import { tagEvent } from "../pipeline/tag-event";
 import { uploadEventImage } from "../data/storage";
+import { mockEventCheckinRecord } from "../pipeline/voice-ontology";
 import { requireAuth, type AuthVariables } from "./auth";
 import { vapiAuth } from "../vapi/auth";
 import { handleChatCompletions } from "../vapi/adapter";
+import { handleVapiWebhook } from "../vapi/webhook";
+import { callUserEventCheckin } from "../vapi/call-user-checkin";
+import { sendEventsDigest } from "../email/send-events";
 
 // The standalone Chiron backend. A single Hono app exposing the channel-aware
 // agent + the events store over HTTP, consumed by every frontend (web app,
@@ -71,10 +87,170 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
   app.get("/health", (c) => c.json({ ok: true, mode: mode() }));
   app.get("/", (c) => c.json({ service: "chiron-backend", ok: true }));
 
+  // --- Auth: self-hosted email + password (replaces Supabase Auth) ---------
+
+  // POST /api/auth/signup { email, password } -> create account + session.
+  app.post("/api/auth/signup", async (c) => {
+    const creds = await readCredentials(c);
+    if ("error" in creds) return c.json({ error: creds.error }, 400);
+
+    try {
+      const result = await createUser(creds.email, creds.password);
+      if ("error" in result) return c.json({ error: result.error }, 409);
+      const token = await createSession(result.user.id);
+      return c.json({ token, user: result.user }, 201);
+    } catch (err) {
+      console.error("[/api/auth/signup] error:", err);
+      return c.json({ error: "Failed to create account." }, 500);
+    }
+  });
+
+  // POST /api/auth/login { email, password } -> session on valid credentials.
+  app.post("/api/auth/login", async (c) => {
+    const creds = await readCredentials(c);
+    if ("error" in creds) return c.json({ error: creds.error }, 400);
+
+    try {
+      const result = await authenticate(creds.email, creds.password);
+      if (!result) return c.json({ error: "Invalid email or password." }, 401);
+      return c.json({ token: result.token, user: result.user });
+    } catch (err) {
+      console.error("[/api/auth/login] error:", err);
+      return c.json({ error: "Failed to sign in." }, 500);
+    }
+  });
+
+  // POST /api/auth/logout -> revoke the caller's session token.
+  app.post("/api/auth/logout", requireAuth, async (c) => {
+    const header = c.req.header("authorization") ?? "";
+    const token = header.toLowerCase().startsWith("bearer ")
+      ? header.slice(7).trim()
+      : "";
+    try {
+      if (token) await deleteSession(token);
+      return c.json({ ok: true });
+    } catch (err) {
+      console.error("[/api/auth/logout] error:", err);
+      return c.json({ error: "Failed to sign out." }, 500);
+    }
+  });
+
+  // GET /api/auth/me -> the authenticated user (used to validate a stored token).
+  app.get("/api/auth/me", requireAuth, (c) =>
+    c.json({ user: c.get("authUser") }),
+  );
+
   // VAPI Custom LLM — OpenAI-compatible ingress for phone calls.
   if (env.vapiEnabled) {
     app.post("/v1/chat/completions", vapiAuth, handleChatCompletions);
   }
+
+  // VAPI server URL — end-of-call reports saved to user voice ontology.
+  app.post("/api/vapi/webhook", handleVapiWebhook);
+
+  // POST /api/demo/email-events — email a "cool events" digest to the demo
+  // recipient via Resend.
+  app.post("/api/demo/email-events", async (c) => {
+    try {
+      const events = await upcomingEvents(5);
+      const result = await sendEventsDigest(env.demoEmailTo, events);
+      if (!result.sent) {
+        return c.json({ error: result.error ?? "Failed to send email." }, 502);
+      }
+      return c.json({
+        sent: true,
+        id: result.id,
+        to: env.demoEmailTo,
+        count: events.length,
+      });
+    } catch (err) {
+      console.error("[/api/demo/email-events] error:", err);
+      return c.json({ error: "Failed to send email." }, 500);
+    }
+  });
+
+  // POST /api/demo/call-user — manually trigger outbound event check-in call.
+  app.post("/api/demo/call-user", async (c) => {
+    let body: unknown = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      // empty body is fine
+    }
+    const eventId =
+      typeof (body as { event_id?: unknown })?.event_id === "string"
+        ? (body as { event_id: string }).event_id
+        : undefined;
+
+    try {
+      let demoProfile = await getProfile(env.demoCallProfileId);
+      if (!demoProfile) {
+        demoProfile = await findProfileByFullName("Maria Chen");
+      }
+      if (!demoProfile) {
+        return c.json(
+          { error: `Demo profile not found: ${env.demoCallProfileId}` },
+          404,
+        );
+      }
+
+      // Demo button always dials the configured demo number — never the
+      // profile's contact_phone, so we don't accidentally call a seed/demo user.
+      const phone = env.demoCallUserPhone;
+      if (!phone) {
+        return c.json(
+          { error: "Demo user has no phone. Set DEMO_CALL_USER_PHONE." },
+          400,
+        );
+      }
+
+      const events = await upcomingEvents(10);
+      const event = eventId
+        ? await getEvent(eventId)
+        : events.find((e) => e.category === "food_bank") ?? events[0];
+      if (!event) {
+        return c.json({ error: "No upcoming event found for demo call." }, 404);
+      }
+
+      const result = await callUserEventCheckin({
+        userName: demoProfile.full_name ?? "Maria Chen",
+        userPhone: phone,
+        profileId: demoProfile.id,
+        event: {
+          title: event.title,
+          start_time: event.start_time,
+          city: event.city,
+        },
+      });
+
+      if (!result.placed) {
+        return c.json({ error: result.error ?? "Call failed." }, 500);
+      }
+
+      let updatedProfile = demoProfile;
+      if (result.mock && result.callId) {
+        const record = mockEventCheckinRecord(result.callId, event.title);
+        const saved = await appendVoiceOntology(demoProfile.id, record);
+        if (saved) updatedProfile = saved;
+      }
+
+      return c.json({
+        placed: true,
+        mock: result.mock ?? false,
+        call_id: result.callId,
+        user: demoProfile.full_name,
+        phone,
+        event: { id: event.id, title: event.title },
+        voice_ontology: updatedProfile.voice_ontology,
+        note: result.mock
+          ? "Mock call — sample ontology saved immediately. With VAPI configured, ontology updates via webhook after the real call ends."
+          : "Call placed. Ontology will update when VAPI sends end-of-call-report to /api/vapi/webhook.",
+      });
+    } catch (err) {
+      console.error("[/api/demo/call-user] error:", err);
+      return c.json({ error: "Failed to place demo call." }, 500);
+    }
+  });
 
   // POST /api/chat  { channel, messages }  ->  AgentResult
   app.post("/api/chat", requireAuth, async (c) => {
@@ -95,7 +271,17 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
     if (messages.length === 0) {
       return c.json({ error: "No messages provided." }, 400);
     }
-    const profile = sanitizeProfile(b.profile);
+    const authUser = c.get("authUser");
+    // Prefer the stored server-side profile — it carries the full ontology
+    // (learned facts, voice goals, name) the thin client payload lacks. Fall
+    // back to the client-sent profile when the user hasn't saved one yet.
+    let profile = sanitizeProfile(b.profile);
+    try {
+      const stored = authUser?.id ? await getProfile(authUser.id) : null;
+      if (stored) profile = toAgentProfile(stored);
+    } catch (err) {
+      console.error("[/api/chat] profile load failed:", err);
+    }
 
     logVerbose(
       "chat",
@@ -105,7 +291,12 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
 
     try {
       const started = Date.now();
-      const result = await runAgent({ channel, messages, profile });
+      const result = await runAgent({
+        channel,
+        messages,
+        profile,
+        userId: authUser?.id ?? null,
+      });
       logVerbose(
         "chat",
         `done in ${Date.now() - started}ms`,
@@ -255,6 +446,35 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
         ...parsed.input,
         registration_form_id: form?.id ?? null,
       });
+
+      // Remember the attendee's identity on their profile so the next event's
+      // registration form is prefilled without re-asking (the "reuse across
+      // events" behavior). Only fill gaps; never overwrite existing values.
+      const learnedName = parsed.input.attendee_name?.trim();
+      const learnedPhone = parsed.input.contact_phone?.trim();
+      const fillName = !profile.full_name && learnedName ? learnedName : null;
+      const fillPhone = !profile.contact_phone && learnedPhone ? learnedPhone : null;
+      if (fillName || fillPhone) {
+        try {
+          await upsertProfile({
+            id: profile.id,
+            full_name: fillName ?? profile.full_name,
+            contact_phone: fillPhone ?? profile.contact_phone,
+            ui_mode: profile.ui_mode,
+            accessibility_needs: profile.accessibility_needs,
+            preferred_tags: profile.preferred_tags,
+            city: profile.city,
+            free_only: profile.free_only,
+            quiz_answers: profile.quiz_answers,
+            voice_ontology: profile.voice_ontology,
+          });
+        } catch (err) {
+          // Non-fatal: the registration already saved; memory enrichment is
+          // best-effort.
+          console.error("[/api/event-registrations] profile enrich failed:", err);
+        }
+      }
+
       return c.json({ registration }, 201);
     } catch (err) {
       console.error("[/api/event-registrations POST] error:", err);
@@ -375,6 +595,10 @@ function sanitizeProfile(raw: unknown): AgentProfile | null {
   const p = raw as Record<string, unknown>;
   return {
     ui_mode: p.ui_mode === "quick" ? "quick" : "elaborate",
+    full_name:
+      typeof p.full_name === "string" && p.full_name.trim()
+        ? p.full_name.trim()
+        : null,
     accessibility_needs: sanitizeStaticTags(p.accessibility_needs),
     preferred_tags: sanitizeStaticTags(p.preferred_tags),
     city: typeof p.city === "string" && p.city.trim() ? p.city.trim() : null,
@@ -391,6 +615,29 @@ function sanitizeAnswers(raw: unknown): Record<string, boolean> {
     if (known.has(key) && typeof value === "boolean") out[key] = value;
   }
   return out;
+}
+
+/** Parse + validate an { email, password } auth body. */
+async function readCredentials(
+  c: Context,
+): Promise<{ email: string; password: string } | { error: string }> {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return { error: "Invalid JSON body." };
+  }
+  const b = (body ?? {}) as Record<string, unknown>;
+  const email = typeof b.email === "string" ? b.email.trim() : "";
+  const password = typeof b.password === "string" ? b.password : "";
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { error: "A valid email is required." };
+  }
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters." };
+  }
+  return { email, password };
 }
 
 function isUuid(v: string): boolean {

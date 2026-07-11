@@ -36,18 +36,25 @@ export async function runAgent(req: AgentRequest): Promise<AgentResult> {
 
   if (!llm) {
     logVerbose("agent", "using mock planner (no live LLM configured)");
-    return mockResult(req.messages, req.channel, caps, req.profile);
+    return mockResult(req.messages, req.channel, caps, req.profile, req.userId);
   }
 
   logVerbose("agent", `using ${llm.provider} model=${llm.model}`);
   try {
-    return await runWithModel(llm, req.messages, req.channel, caps, req.profile);
+    return await runWithModel(
+      llm,
+      req.messages,
+      req.channel,
+      caps,
+      req.profile,
+      req.userId,
+    );
   } catch (err) {
     console.error(
       `[agent] ${llm.provider} model call failed — falling back to mock planner:`,
       err,
     );
-    return mockResult(req.messages, req.channel, caps, req.profile);
+    return mockResult(req.messages, req.channel, caps, req.profile, req.userId);
   }
 }
 
@@ -57,6 +64,7 @@ async function runWithModel(
   channel: Channel,
   caps: ChannelCapabilities,
   profile?: AgentProfile | null,
+  userId?: string | null,
 ): Promise<AgentResult> {
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt(new Date(), caps, profile) },
@@ -101,7 +109,9 @@ async function runWithModel(
         parsedArgs = {};
       }
 
-      const outcome = await executeTool(call.function.name, parsedArgs);
+      const outcome = await executeTool(call.function.name, parsedArgs, {
+        profileId: userId,
+      });
       actions.push(...outcome.actions);
       messages.push({
         role: "tool",
@@ -132,8 +142,9 @@ async function mockResult(
   channel: Channel,
   caps: ChannelCapabilities,
   profile?: AgentProfile | null,
+  userId?: string | null,
 ): Promise<AgentResult> {
-  const { message, actions } = await planWithoutLLM(history, caps, profile);
+  const { message, actions } = await planWithoutLLM(history, caps, profile, userId);
   return finalize(message, actions, "mock", channel, caps);
 }
 

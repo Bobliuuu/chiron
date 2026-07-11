@@ -7,17 +7,24 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import type {
-  EventRegistration,
-  EventRegistrationFormSchema,
-  EventRegistrationInput,
-  JsonObject,
-  PublicEvent,
-  RegistrationFormField,
+import {
+  EVENT_REGISTRATION_FIELDS,
+  fieldSpec,
+  type EventRegistration,
+  type EventRegistrationFormSchema,
+  type EventRegistrationInput,
+  type JsonObject,
+  type PublicEvent,
+  type RegistrationFormField,
 } from "@chiron/shared";
 import { formatDateTime } from "@/lib/format";
 import { apiUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+// Built-in field copy comes from the shared EVENT_REGISTRATION_FIELDS template.
+const rf = (id: string) => fieldSpec(EVENT_REGISTRATION_FIELDS, id);
+const rLabel = (id: string) => rf(id)?.label ?? id;
+const rPlaceholder = (id: string) => rf(id)?.placeholder ?? undefined;
 
 interface RegistrationFormState {
   attendee_name: string;
@@ -41,7 +48,7 @@ export function EventRegistrationForm({
   profileId: string;
   onSaved?: (registration: EventRegistration) => void;
 }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [form, setForm] = useState<RegistrationFormState>({
     attendee_name: "",
     contact_email: "",
@@ -49,6 +56,7 @@ export function EventRegistrationForm({
     accessibility_requests: "",
     notes: "",
   });
+  const prefilledRef = useRef(false);
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">(
     "idle",
   );
@@ -104,6 +112,39 @@ export function EventRegistrationForm({
       cancelled = true;
     };
   }, [event.id]);
+
+  // Prefill from what Chiron already knows about this user — their name and
+  // phone from the profile ontology, plus the signed-in email. This is the
+  // "reuse across events" behavior: any event's form opens pre-filled, and
+  // whatever the user types is remembered (server-side) for the next event.
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    prefilledRef.current = true;
+    const email = user?.email ?? "";
+
+    async function prefill() {
+      let fullName = "";
+      let phone = "";
+      try {
+        const res = await authFetch(apiUrl(`/api/profile?id=${profileId}`));
+        if (res.ok) {
+          const data = await res.json();
+          fullName = (data.profile?.full_name as string | null) ?? "";
+          phone = (data.profile?.contact_phone as string | null) ?? "";
+        }
+      } catch {
+        // No profile / offline — fall back to the signed-in email only.
+      }
+      setForm((f) => ({
+        ...f,
+        attendee_name: f.attendee_name || fullName,
+        contact_email: f.contact_email || email,
+        contact_phone: f.contact_phone || phone,
+      }));
+    }
+
+    void prefill();
+  }, [authFetch, user?.email, profileId]);
 
   const set = <K extends keyof RegistrationFormState>(
     key: K,
@@ -173,7 +214,7 @@ export function EventRegistrationForm({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name" required>
+        <Field label={rLabel("attendee_name")} required>
           <input
             className={inputCls}
             value={form.attendee_name}
@@ -182,7 +223,7 @@ export function EventRegistrationForm({
             required
           />
         </Field>
-        <Field label="Email" required>
+        <Field label={rLabel("contact_email")} required>
           <input
             type="email"
             className={inputCls}
@@ -194,7 +235,7 @@ export function EventRegistrationForm({
         </Field>
       </div>
 
-      <Field label="Phone">
+      <Field label={rLabel("contact_phone")}>
         <input
           type="tel"
           className={inputCls}
@@ -204,16 +245,16 @@ export function EventRegistrationForm({
         />
       </Field>
 
-      <Field label="Accessibility requests">
+      <Field label={rLabel("accessibility_requests")}>
         <input
           className={inputCls}
           value={form.accessibility_requests}
           onChange={(e) => set("accessibility_requests", e.target.value)}
-          placeholder="Anything that would help you attend"
+          placeholder={rPlaceholder("accessibility_requests")}
         />
       </Field>
 
-      <Field label="Notes">
+      <Field label={rLabel("notes")}>
         <textarea
           className={inputCls}
           rows={2}

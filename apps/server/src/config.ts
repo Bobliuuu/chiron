@@ -54,6 +54,35 @@ export const env = {
   vapiLlmApiKey: process.env.VAPI_LLM_API_KEY ?? "",
   // Set to "false" to disable the /v1/chat/completions route entirely.
   vapiEnabled: (process.env.VAPI_ENABLED ?? "true").toLowerCase() !== "false",
+
+  // --- VAPI outbound calls (organizer outreach) ---
+  // API key from https://dashboard.vapi.ai — used to place outbound calls.
+  vapiApiKey: process.env.VAPI_API_KEY ?? "",
+  // VAPI phone number ID to dial from (Phone Numbers tab in dashboard).
+  vapiPhoneNumberId: process.env.VAPI_PHONE_NUMBER_ID ?? "",
+  // Optional saved assistant for outbound calls. When unset, a transient
+  // OpenAI assistant is created per call.
+  vapiOutboundAssistantId: process.env.VAPI_OUTBOUND_ASSISTANT_ID ?? "",
+  // ElevenLabs voice id for transient outbound assistants.
+  vapiVoiceId: process.env.VAPI_VOICE_ID ?? "",
+  // Public HTTPS base URL for VAPI webhooks (ngrok or production API host).
+  vapiWebhookBaseUrl: (process.env.VAPI_WEBHOOK_BASE_URL ?? "").replace(/\/$/, ""),
+
+  // --- Email (Resend) ---
+  // Demo key + recipient are hardcoded as fallbacks so the "Email events"
+  // button works out of the box; override via env in real deployments.
+  resendApiKey:
+    process.env.RESEND_API_KEY || "re_9fdFJ4Qa_8uc3q4s2iPakhXmm69ewrd5X",
+  // Resend's sandbox sender works without a verified domain.
+  emailFrom: process.env.EMAIL_FROM || "Chiron <onboarding@resend.dev>",
+  // Who the demo "cool events" digest goes to.
+  demoEmailTo: process.env.DEMO_EMAIL_TO || "mmmzzz66g@gmail.com",
+
+  // --- Demo: manual outbound user check-in ---
+  // Hardcoded profile to call when triggering the demo button.
+  demoCallProfileId: process.env.DEMO_CALL_PROFILE_ID ?? "usr_maria_chen",
+  // Demo always dials this number (E.164). Override via DEMO_CALL_USER_PHONE.
+  demoCallUserPhone: process.env.DEMO_CALL_USER_PHONE || "+16479681128",
 };
 
 /** True when a real OpenAI key is configured. */
@@ -66,6 +95,10 @@ export const hasLocalLlm = () =>
 /** True when Supabase is configured (otherwise: in-memory store). */
 export const hasSupabase = () =>
   env.supabaseUrl.length > 0 && env.supabaseAnonKey.length > 0;
+
+/** True when VAPI outbound calling is fully configured. */
+export const hasVapiOutbound = () =>
+  env.vapiApiKey.length > 0 && env.vapiPhoneNumberId.length > 0;
 
 /**
  * Resolve the effective LLM provider from the configured setting and available

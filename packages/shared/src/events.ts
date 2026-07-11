@@ -62,6 +62,9 @@ export interface EventRecord {
   registration_url: string | null;
   registration_instructions: string | null;
   host_organization: string | null;
+  /** Event organizer contact — used for voice outbound calls (demo). */
+  organizer_name: string | null;
+  organizer_phone: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +93,8 @@ export interface EventInput {
   registration_url?: string | null;
   registration_instructions?: string | null;
   host_organization?: string | null;
+  organizer_name?: string | null;
+  organizer_phone?: string | null;
 }
 
 /**

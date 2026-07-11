@@ -166,15 +166,83 @@ instead of inline URL.
 | Recommend | "Suggest something free for seniors this weekend" | Agent recommends upcoming events |
 | Create | "I want to publish a fundraiser on June 20th at 6pm in Markham" | Agent collects missing fields, reads back summary, asks to confirm |
 | Confirm | "Yes, publish it" | Agent calls `create_event` and confirms title + date |
+| Auth | "My name is Maria Chen" | Agent recognizes demo user and personalizes recommendations |
+| Organizer call | "Ask the food bank organizer if they have wheelchair access" | Agent asks for name if needed, then places outbound call to organizer |
 
-## Production checklist
+## Voice authentication (demo)
+
+Chiron uses **name-only auth** on the phone — no password. When the caller says their full name (e.g. "My name is Maria Chen"), the backend looks up `profiles.full_name` and loads their preferences for the rest of the call.
+
+Demo users in mock mode / seed data:
+
+| Full name | Preferences |
+| --------- | ----------- |
+| Maria Chen | Quick mode, wheelchair, Markham, free events |
+| James Okonkwo | Quiet spaces, seniors/health, Toronto |
+
+If auth is required (calling an organizer, personalized picks) and no name matches, the agent asks: "What's your full name?"
+
+## Outbound organizer calls
+
+When a caller asks to **ask questions to event organizers**, the voice agent uses the `call_event_organizer` tool to place an outbound VAPI call. Each event can have `organizer_name` and `organizer_phone` on file.
+
+Configure outbound calling in `apps/server/.env`:
+
+```bash
+VAPI_API_KEY=your-vapi-dashboard-api-key
+VAPI_PHONE_NUMBER_ID=your-vapi-phone-number-id
+# Optional — reuse a saved outbound assistant instead of a transient one
+VAPI_OUTBOUND_ASSISTANT_ID=
+```
+
+Without `VAPI_API_KEY` / `VAPI_PHONE_NUMBER_ID`, the tool runs in **mock mode** (logs the call, returns success for demos).
+
+The outbound assistant introduces itself as Chiron, asks the organizer the caller's questions, and ends politely. Use a dedicated outbound assistant (OpenAI/11labs in VAPI) — not the inbound Custom LLM assistant, which would loop back to your backend.
+
+## Demo: outbound user check-in (manual trigger)
+
+For matching users to each other, Chiron can **call community members** before an event and learn what they want to get out of it. Results are saved to `profiles.voice_ontology` (event goals + motivations).
+
+### Web UI button
+
+The web app header has a **"Demo: Call user"** button. It manually triggers (no cron) an outbound call to the hardcoded demo user **Maria Chen** about the next food bank event.
+
+### API
+
+```bash
+curl -XPOST http://localhost:8787/api/demo/call-user \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Optional: pass `event_id` to target a specific event.
+
+### What happens
+
+1. Backend calls Maria's phone (or mock mode if VAPI not configured).
+2. Chiron says the event is coming up and asks what she wants to get out of it.
+3. On call end, VAPI POSTs `end-of-call-report` to `/api/vapi/webhook`.
+4. Transcript is parsed into `voice_ontology` on her profile (goals, motivations).
+5. In mock mode, sample ontology is saved immediately so you can demo without a phone.
+
+### Env vars
+
+```bash
+DEMO_CALL_PROFILE_ID=usr_maria_chen   # or Supabase UUID from seed
+DEMO_CALL_USER_PHONE=+1xxxxxxxxxx     # override; else profile.contact_phone
+VAPI_WEBHOOK_BASE_URL=https://<ngrok-or-api-host>  # for real call ontology capture
+```
+
+Point ngrok at the backend (`ngrok http 8787`) and set `VAPI_WEBHOOK_BASE_URL` so VAPI can reach `/api/vapi/webhook` when the call ends.
+
 
 - [ ] Backend deployed with public HTTPS ([deploy.md](./deploy.md))
 - [ ] `VAPI_LLM_API_KEY` set in production env (never leave auth open in prod)
 - [ ] `OPENAI_API_KEY` and `SUPABASE_*` configured
+- [ ] `VAPI_API_KEY` + `VAPI_PHONE_NUMBER_ID` set for organizer outbound calls
 - [ ] VAPI Custom LLM credential points to `https://api.<yourdomain>/v1`
 - [ ] Phone number linked to Chiron assistant
-- [ ] Test call: search + create + confirm
+- [ ] Test call: search + create + confirm + organizer outreach
 
 ## Architecture notes
 
@@ -191,4 +259,6 @@ instead of inline URL.
 | 501 streaming error | Disable streaming on the VAPI assistant |
 | Agent says it can't publish | Ensure you're on voice channel (Custom LLM route always uses `voice`) and caller confirmed with "yes" |
 | Events don't persist | Configure `SUPABASE_URL` + keys in backend env |
+| Organizer call not placed | Set `VAPI_API_KEY` and `VAPI_PHONE_NUMBER_ID`; without them calls run in mock mode |
+| Name not recognized | Demo users: Maria Chen, James Okonkwo — add `full_name` to profiles in Supabase |
 | Slow responses | Normal during tool calls; consider shorter first message and gpt-4o-mini |

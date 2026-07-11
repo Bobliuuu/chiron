@@ -70,6 +70,7 @@ export async function planWithoutLLM(
   history: ChatMessage[],
   caps: ChannelCapabilities,
   profile?: AgentProfile | null,
+  userId?: string | null,
 ): Promise<Plan> {
   const userMessages = history.filter((m) => m.role === "user");
   const last = userMessages[userMessages.length - 1];
@@ -82,6 +83,9 @@ export async function planWithoutLLM(
       userMessages.some((m) => isCreateIntent(m.content.toLowerCase())));
 
   if (inCreateFlow) return planCreate(last?.content ?? "", caps, history);
+  if (isOrganizerCallIntent(text)) return planOrganizerCall(history, caps, profile);
+  if (isRememberIntent(text)) return planRemember(last?.content ?? "", userId);
+  if (isRegisterIntent(text)) return planRegister(text, caps, profile);
   if (isRecommendIntent(text)) return planRecommend(text, caps, profile);
   return planSearch(text, caps);
 }
@@ -107,6 +111,32 @@ function isRecommendIntent(t: string): boolean {
 
 function isConfirmIntent(t: string): boolean {
   return /\b(yes|yeah|yep|correct|publish|go ahead|sounds good|do it|please do|that's right|that is right)\b/.test(
+    t,
+  );
+}
+
+function isOrganizerCallIntent(t: string): boolean {
+  return (
+    /\b(ask|contact|call|reach|phone)\b.*\b(organizer|organisers?|host)\b/.test(
+      t,
+    ) ||
+    /\b(organizer|organisers?|host)\b.*\b(ask|contact|call|reach|questions?)\b/.test(
+      t,
+    )
+  );
+}
+
+function isRegisterIntent(t: string): boolean {
+  return (
+    /\b(register|sign ?up|rsvp|reserve|book)\b/.test(t) ||
+    /\b(i want to|i'd like to|can i|how do i|help me)\b.*\b(attend|join|go to|come to)\b/.test(
+      t,
+    )
+  );
+}
+
+function isRememberIntent(t: string): boolean {
+  return /\b(remember|keep in mind|note that|from now on|for future|don'?t forget)\b/.test(
     t,
   );
 }
@@ -215,6 +245,107 @@ async function planRecommend(
   };
 }
 
+async function planRegister(
+  text: string,
+  caps: ChannelCapabilities,
+  profile?: AgentProfile | null,
+): Promise<Plan> {
+  // The no-LLM path has no memory of previously shown event ids, so find the
+  // best candidate from the request text, then register for it.
+  const city = extractCity(text) ?? profile?.city ?? undefined;
+  const category = extractCategory(text);
+  const query = extractQuery(text, category);
+
+  const search = await executeTool("search_events", {
+    query,
+    city,
+    category,
+    limit: 1,
+  });
+  const target = eventsFromActions(search.actions)[0];
+
+  if (!target) {
+    return {
+      message: `I can help you register. Which event would you like to sign up for? Tell me its name, or ask me to find one first.`,
+      actions: [],
+    };
+  }
+
+  const outcome = await executeTool("register_event", { event_id: target.id });
+
+  // Prose-only: relay how to sign up. Rich UI: surface the registration form.
+  if (!caps.richUi) {
+    const how = target.registration_url
+      ? `You can sign up here: ${target.registration_url}.`
+      : target.registration_instructions
+        ? target.registration_instructions
+        : `I've noted your interest and the organizer will follow up.`;
+    const where = target.city ? ` in ${target.city}` : "";
+    return {
+      message: `Great — for "${target.title}"${where}: ${how} Anything else?`,
+      actions: [],
+    };
+  }
+  return {
+    message: `Here's the registration form for "${target.title}" — fill it in below and submit to confirm your spot.`,
+    actions: outcome.actions,
+  };
+}
+
+async function planRemember(
+  original: string,
+  userId?: string | null,
+): Promise<Plan> {
+  const fact = extractFact(original);
+  const outcome = await executeTool("remember_user_fact", fact, {
+    profileId: userId,
+  });
+  let persisted = false;
+  try {
+    persisted = Boolean(
+      (JSON.parse(outcome.forModel) as { persisted?: boolean }).persisted,
+    );
+  } catch {
+    persisted = false;
+  }
+  return {
+    message: persisted
+      ? `Got it — I'll remember that and use it when I recommend events.`
+      : `Got it — I'll keep that in mind for now.`,
+    actions: [],
+  };
+}
+
+/** Rough fact extraction for the no-LLM path (the real agent does this better). */
+function extractFact(original: string): Record<string, unknown> {
+  const t = original.toLowerCase();
+  let object = original
+    .replace(
+      /^.*?\b(remember|keep in mind|note that|from now on|for future(?: reference)?|don'?t forget)\b[:,]?\s*/i,
+      "",
+    )
+    .replace(/\b(that|to|i|please|you should|my|am|really)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  let predicate = "note";
+  const category = extractCategory(t);
+  if (/\b(weekend|weekday|evening|morning|afternoon|saturday|sunday|monday|tuesday|wednesday|thursday|friday)\b/.test(t)) {
+    predicate = "preferred_day";
+  } else if (category) {
+    predicate = "prefers_tag";
+    object = CATEGORY_TAG[category] ?? category;
+  } else if (/\bfree\b/.test(t)) {
+    predicate = "budget";
+    object = "free_only";
+  } else if (/\b(kids?|children|famil(?:y|ies))\b/.test(t)) {
+    predicate = "travels_with";
+    object = "kids";
+  }
+
+  return { predicate, object: object || original.trim(), confidence: 0.85 };
+}
+
 async function planCreate(
   original: string,
   caps: ChannelCapabilities,
@@ -319,6 +450,105 @@ async function planCreate(
     `Review and complete the form below — add anything I missed (date, cost, audience, accessibility), then submit to publish.`;
 
   return { message, actions: outcome.actions };
+}
+
+async function planOrganizerCall(
+  history: ChatMessage[],
+  caps: ChannelCapabilities,
+  profile?: AgentProfile | null,
+): Promise<Plan> {
+  if (!caps.voiceTelephony) {
+    return {
+      message:
+        "I can only place organizer calls over the phone right now. Call the Chiron voice line and ask me to contact the organizer.",
+      actions: [],
+    };
+  }
+
+  const userTexts = history.filter((m) => m.role === "user").map((m) => m.content);
+  const combined = userTexts.join(" ").toLowerCase();
+  const city = extractCity(combined);
+  const category = extractCategory(combined);
+
+  const search = await executeTool("search_events", {
+    query: category ? undefined : extractQuery(combined, category),
+    city,
+    category,
+    limit: 3,
+  });
+
+  let events: { id: string; title: string }[] = [];
+  try {
+    const parsed = JSON.parse(search.forModel) as {
+      events?: { id: string; title: string }[];
+    };
+    events = parsed.events ?? [];
+  } catch {
+    events = [];
+  }
+
+  if (events.length === 0) {
+    return {
+      message:
+        "I can call an event organizer for you, but I need to know which event. What event are you asking about?",
+      actions: [],
+    };
+  }
+
+  const event = events[0];
+  const questions = extractQuestions(userTexts.at(-1) ?? "");
+  if (questions.length === 0) {
+    return {
+      message: `I can call the organizer for "${event.title}". What would you like me to ask them?`,
+      actions: [],
+    };
+  }
+
+  if (!profile?.full_name) {
+    return {
+      message:
+        "Before I call the organizer, what's your full name? I use it to identify you in our community directory.",
+      actions: [],
+    };
+  }
+
+  const outcome = await executeTool("call_event_organizer", {
+    event_id: event.id,
+    questions,
+    caller_name: profile.full_name,
+  });
+  const parsed = JSON.parse(outcome.forModel) as {
+    placed?: boolean;
+    organizer?: string;
+    mock?: boolean;
+    error?: string;
+  };
+
+  if (!parsed.placed) {
+    return {
+      message: `I couldn't place that call: ${parsed.error ?? "something went wrong"}.`,
+      actions: [],
+    };
+  }
+
+  const mode = parsed.mock ? " (demo mode — no real call placed)" : "";
+  return {
+    message: `I'm calling ${parsed.organizer ?? "the organizer"} now to ask your questions about "${event.title}"${mode}. I'll let you know what they say.`,
+    actions: [],
+  };
+}
+
+function extractQuestions(text: string): string[] {
+  const questions: string[] = [];
+  const askMatch = text.match(
+    /(?:ask|find out|whether|if)\s+(?:them\s+|the organizer\s+)?(.+?)(?:\.|$)/i,
+  );
+  if (askMatch?.[1]) questions.push(askMatch[1].trim());
+  if (/\bwheelchair\b/i.test(text))
+    questions.push("Is the venue wheelchair accessible?");
+  if (/\bregistration\b/i.test(text))
+    questions.push("How do people register for this event?");
+  return [...new Set(questions.filter((q) => q.length > 5))];
 }
 
 // --- extraction helpers ----------------------------------------------------

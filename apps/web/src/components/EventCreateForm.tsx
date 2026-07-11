@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import {
-  CATEGORY_LABELS,
-  EVENT_CATEGORIES,
+  EVENT_CREATE_FIELDS,
+  fieldSpec,
   type EventCategory,
   type EventDraft,
   type PublicEvent,
@@ -11,6 +11,15 @@ import {
 import { toDatetimeLocal } from "@/lib/format";
 import { apiUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+// Field copy (labels/placeholders/hints/options) comes from the shared
+// EVENT_CREATE_FIELDS template — the same spec the agent's draft_event tool is
+// generated from — so this form and the AI's draft can never drift apart.
+const cf = (id: string) => fieldSpec(EVENT_CREATE_FIELDS, id);
+const cLabel = (id: string) => cf(id)?.label ?? id;
+const cPlaceholder = (id: string) => cf(id)?.placeholder ?? undefined;
+const cHint = (id: string) => cf(id)?.hint ?? undefined;
+const CATEGORY_OPTS = cf("category")?.options ?? [];
 
 // The event-creation "page" surfaced inline in chat, prefilled from the agent's
 // draft. The nonprofit reviews, edits, and submits — keeping a human in control
@@ -160,27 +169,27 @@ export function EventCreateForm({
         <span className="text-xs text-slate-400">Prefilled by Chiron</span>
       </div>
 
-      <Field label="Title" required>
+      <Field label={cLabel("title")} required>
         <input
           className={inputCls}
           value={form.title}
           onChange={(e) => set("title", e.target.value)}
-          placeholder="e.g. Charity Fundraiser Gala"
+          placeholder={cPlaceholder("title")}
           required
         />
       </Field>
 
-      <Field label="Short summary" required hint="One plain-language sentence.">
+      <Field label={cLabel("summary")} required hint={cHint("summary")}>
         <input
           className={inputCls}
           value={form.summary}
           onChange={(e) => set("summary", e.target.value)}
-          placeholder="What is this event, in one line?"
+          placeholder={cPlaceholder("summary")}
           required
         />
       </Field>
 
-      <Field label="Description">
+      <Field label={cLabel("description")}>
         <textarea
           className={inputCls}
           rows={3}
@@ -189,21 +198,21 @@ export function EventCreateForm({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Category">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={cLabel("category")}>
           <select
             className={inputCls}
             value={form.category}
             onChange={(e) => set("category", e.target.value as EventCategory)}
           >
-            {EVENT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
+            {CATEGORY_OPTS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Hosting organization">
+        <Field label={cLabel("host_organization")}>
           <input
             className={inputCls}
             value={form.host_organization}
@@ -212,8 +221,8 @@ export function EventCreateForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Starts" required>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={cLabel("start_time")} required>
           <input
             type="datetime-local"
             className={inputCls}
@@ -222,7 +231,7 @@ export function EventCreateForm({
             required
           />
         </Field>
-        <Field label="Ends">
+        <Field label={cLabel("end_time")}>
           <input
             type="datetime-local"
             className={inputCls}
@@ -238,35 +247,35 @@ export function EventCreateForm({
           checked={form.is_online}
           onChange={(e) => set("is_online", e.target.checked)}
         />
-        This is an online event
+        {cLabel("is_online")}
       </label>
 
       {form.is_online ? (
-        <Field label="Online link">
+        <Field label={cLabel("online_url")}>
           <input
             className={inputCls}
             value={form.online_url}
             onChange={(e) => set("online_url", e.target.value)}
-            placeholder="https://…"
+            placeholder={cPlaceholder("online_url")}
           />
         </Field>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Location name">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label={cLabel("location_name")}>
             <input
               className={inputCls}
               value={form.location_name}
               onChange={(e) => set("location_name", e.target.value)}
             />
           </Field>
-          <Field label="City">
+          <Field label={cLabel("city")}>
             <input
               className={inputCls}
               value={form.city}
               onChange={(e) => set("city", e.target.value)}
             />
           </Field>
-          <Field label="Address" className="col-span-2">
+          <Field label={cLabel("address")} className="col-span-2">
             <input
               className={inputCls}
               value={form.address}
@@ -283,33 +292,33 @@ export function EventCreateForm({
             checked={form.is_free}
             onChange={(e) => set("is_free", e.target.checked)}
           />
-          Free to attend
+          {cLabel("is_free")}
         </label>
         {!form.is_free && (
           <input
             className={`${inputCls} flex-1`}
             value={form.cost_note}
             onChange={(e) => set("cost_note", e.target.value)}
-            placeholder="e.g. $10 suggested donation"
+            placeholder={cPlaceholder("cost_note")}
           />
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Audience">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={cLabel("audience")}>
           <input
             className={inputCls}
             value={form.audience}
             onChange={(e) => set("audience", e.target.value)}
-            placeholder="e.g. families, seniors 55+"
+            placeholder={cPlaceholder("audience")}
           />
         </Field>
-        <Field label="Accessibility" hint="Comma-separated">
+        <Field label={cLabel("accessibility")} hint={cHint("accessibility")}>
           <input
             className={inputCls}
             value={form.accessibility}
             onChange={(e) => set("accessibility", e.target.value)}
-            placeholder="wheelchair, asl"
+            placeholder={cPlaceholder("accessibility")}
           />
         </Field>
       </div>
@@ -342,7 +351,7 @@ export function EventCreateForm({
         )}
       </Field>
 
-      <Field label="Transportation notes">
+      <Field label={cLabel("transportation")}>
         <input
           className={inputCls}
           value={form.transportation}
@@ -350,16 +359,16 @@ export function EventCreateForm({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Registration link">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label={cLabel("registration_url")}>
           <input
             className={inputCls}
             value={form.registration_url}
             onChange={(e) => set("registration_url", e.target.value)}
-            placeholder="https://…"
+            placeholder={cPlaceholder("registration_url")}
           />
         </Field>
-        <Field label="Registration instructions">
+        <Field label={cLabel("registration_instructions")}>
           <input
             className={inputCls}
             value={form.registration_instructions}

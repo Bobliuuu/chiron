@@ -37,6 +37,10 @@ export function ChatApp() {
   const { authFetch, signOut, user } = useAuth();
   const [messages, setMessages] = useState<UiMessage[]>([GREETING]);
   const [sending, setSending] = useState(false);
+  const [demoCalling, setDemoCalling] = useState(false);
+  const [demoEmailing, setDemoEmailing] = useState(false);
+  // Mobile-only: the events panel is a slide-over drawer below the lg breakpoint.
+  const [showEvents, setShowEvents] = useState(false);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [mode, setMode] = useState<AgentResult["mode"] | null>(null);
@@ -230,29 +234,149 @@ export function ChatApp() {
     ]);
   }
 
+  async function triggerDemoCall() {
+    setDemoCalling(true);
+    const url = apiUrl("/api/demo/call-user");
+    logApi("POST", url, "(demo outbound call)");
+    try {
+      const res = await authFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : "Demo call failed.",
+        );
+      }
+      const goals = (data.voice_ontology?.event_goals as string[] | undefined) ?? [];
+      const goalText =
+        goals.length > 0 ? ` Saved goals: ${goals.join("; ")}.` : "";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          content: `Demo call placed to ${data.user as string} about "${(data.event as { title: string }).title}".${data.mock ? " (mock mode)" : ""}${goalText}`,
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          content:
+            err instanceof Error
+              ? `Demo call failed: ${err.message}`
+              : "Demo call failed.",
+        },
+      ]);
+    } finally {
+      setDemoCalling(false);
+    }
+  }
+
+  async function triggerDemoEmail() {
+    setDemoEmailing(true);
+    const url = apiUrl("/api/demo/email-events");
+    logApi("POST", url, "(demo email digest)");
+    try {
+      const res = await authFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : "Demo email failed.",
+        );
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          content: `Emailed a digest of ${data.count as number} cool events to ${data.to as string}. 📬`,
+        },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          content:
+            err instanceof Error
+              ? `Demo email failed: ${err.message}`
+              : "Demo email failed.",
+        },
+      ]);
+    } finally {
+      setDemoEmailing(false);
+    }
+  }
+
   return (
     <div className="grid h-screen grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
       {needsQuiz === true && <OnboardingQuiz onDone={handleQuizDone} />}
       {/* Chat column */}
-      <div className="flex h-screen flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+      <div className="flex h-screen min-w-0 flex-col">
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
               C
             </div>
-          <div>
+            <div className="min-w-0">
               <h1 className="text-sm font-semibold text-slate-900">Chiron</h1>
-              <p className="text-[11px] text-slate-400">
+              <p className="truncate text-[11px] text-slate-400">
                 Community event assistant
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {mode && <ModeBadge mode={mode} />}
             <button
               type="button"
+              onClick={() => setShowEvents(true)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 lg:hidden"
+            >
+              Events
+            </button>
+            <button
+              type="button"
+              onClick={() => void triggerDemoCall()}
+              disabled={demoCalling}
+              title="Manually call Maria Chen and ask what she wants from the upcoming food bank event"
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {demoCalling ? "Calling…" : (
+                <>
+                  <span className="sm:hidden">Call</span>
+                  <span className="hidden sm:inline">Demo: Call user</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void triggerDemoEmail()}
+              disabled={demoEmailing}
+              title="Email a summary of cool upcoming events to the demo recipient"
+              className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+            >
+              {demoEmailing ? "Sending…" : (
+                <>
+                  <span className="sm:hidden">Email</span>
+                  <span className="hidden sm:inline">Demo: Email events</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => void signOut()}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
             >
               Sign out
             </button>
@@ -298,7 +422,7 @@ export function ChatApp() {
         </div>
       </div>
 
-      {/* Results / calendar column */}
+      {/* Results / calendar column (desktop) */}
       <div className="hidden lg:block">
         <EventsPanel
           events={events}
@@ -306,6 +430,39 @@ export function ChatApp() {
           profileId={profile?.id ?? null}
         />
       </div>
+
+      {/* Results / calendar drawer (mobile) */}
+      {showEvents && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close events"
+            onClick={() => setShowEvents(false)}
+            className="absolute inset-0 bg-slate-900/40"
+          />
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <span className="text-sm font-semibold text-slate-900">
+                Upcoming events
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowEvents(false)}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <EventsPanel
+                events={events}
+                loading={eventsLoading}
+                profileId={profile?.id ?? null}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

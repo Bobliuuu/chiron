@@ -4,11 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth";
 
 export function AuthScreen() {
-  const { configured, signIn, signUp } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "sent">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
@@ -21,30 +21,12 @@ export function AuthScreen() {
         ? await signIn(email, password)
         : await signUp(email, password);
 
+    // On success the auth context sets the user and AuthGate swaps this screen
+    // out; only failures land back here.
     if (authError) {
       setError(authError);
       setStatus("idle");
-      return;
     }
-
-    setStatus(mode === "signup" ? "sent" : "idle");
-  }
-
-  if (!configured) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <section className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-lg font-semibold text-slate-900">
-            Supabase auth is not configured
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Add `NEXT_PUBLIC_SUPABASE_URL` and
-            `NEXT_PUBLIC_SUPABASE_ANON_KEY` to your web environment, then
-            restart the Next.js dev server.
-          </p>
-        </section>
-      </main>
-    );
   }
 
   return (
@@ -98,12 +80,6 @@ export function AuthScreen() {
         {error && (
           <p role="alert" className="mt-4 text-sm text-red-600">
             {error}
-          </p>
-        )}
-
-        {status === "sent" && (
-          <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-            Check your email to confirm your account, then sign in.
           </p>
         )}
 

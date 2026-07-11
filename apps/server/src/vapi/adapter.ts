@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { ChatMessage, ChatRole } from "@chiron/shared";
 import { runAgent } from "../agent/orchestrator";
+import { resolveVoiceAuth } from "./voice-auth";
 
 /** OpenAI chat completion request shape VAPI sends to Custom LLM endpoints. */
 interface OpenAiChatRequest {
@@ -42,7 +43,12 @@ export async function handleChatCompletions(c: Context): Promise<Response> {
   }
 
   try {
-    const result = await runAgent({ channel: "voice", messages });
+    const auth = await resolveVoiceAuth(messages);
+    const result = await runAgent({
+      channel: "voice",
+      messages,
+      profile: auth.profile,
+    });
     return c.json(toOpenAiCompletion(result.message, body.model));
   } catch (err) {
     console.error("[/v1/chat/completions] agent error:", err);

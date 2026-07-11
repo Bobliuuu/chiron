@@ -9,3 +9,6 @@ export * from "./profile";
 export * from "./registrations";
 export * from "./quiz";
 export * from "./tags";
+export * from "./ontology";
+export * from "./forms";
+export * from "./facts";

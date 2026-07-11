@@ -30,10 +30,15 @@ export interface ChannelCapabilities {
    * Only the web app can today; everything else is prose-only.
    */
   richUi: boolean;
+  /** Phone channel — supports outbound organizer calls and name-based auth. */
+  voiceTelephony: boolean;
 }
 
 export function capabilitiesFor(channel: Channel): ChannelCapabilities {
-  return { richUi: channel === "web" };
+  return {
+    richUi: channel === "web",
+    voiceTelephony: channel === "voice",
+  };
 }
 
 /** Coerce arbitrary input to a known Channel, defaulting to "api". */
@@ -50,7 +55,8 @@ export function asChannel(v: unknown): Channel {
  */
 export type UiAction =
   | { type: "events"; title: string; events: PublicEvent[] }
-  | { type: "event_draft"; draft: EventDraft };
+  | { type: "event_draft"; draft: EventDraft }
+  | { type: "event_registration"; event: PublicEvent };
 
 /** The request every frontend POSTs to the backend's /api/chat. */
 export interface AgentRequest {
@@ -60,6 +66,11 @@ export interface AgentRequest {
   messages: ChatMessage[];
   /** The user's onboarding profile, when known. Personalizes the agent. */
   profile?: AgentProfile | null;
+  /**
+   * The authenticated user's profile id, when known. Lets the agent persist
+   * things it learns (remember_user_fact) to the right profile.
+   */
+  userId?: string | null;
 }
 
 export interface AgentResult {

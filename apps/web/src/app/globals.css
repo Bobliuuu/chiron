@@ -14,6 +14,7 @@ body {
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+  overflow-x: hidden;
 }
 
 /* Visible focus states for keyboard users — accessibility is core to Chiron. */

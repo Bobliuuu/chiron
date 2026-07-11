@@ -5,7 +5,7 @@ import { AuthScreen } from "@/components/AuthScreen";
 import { useAuth } from "@/lib/auth";
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { loading, session } = useAuth();
+  const { loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -15,7 +15,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!session) return <AuthScreen />;
+  if (!user) return <AuthScreen />;
 
   return <>{children}</>;
 }
