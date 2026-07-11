@@ -54,7 +54,8 @@ the whole loop immediately. Add keys to progressively enable the real services.
 
 ## Modes
 
-The backend degrades gracefully — set env in `apps/server/.env`. Each capability
+The backend degrades gracefully — set env in `apps/server/.env` (or the repo
+root `.env` / `.env.local`; the server loads all three). Each capability
 lights up independently:
 
 | Env vars set | Behavior |
