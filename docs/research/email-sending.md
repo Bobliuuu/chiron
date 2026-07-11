@@ -99,4 +99,27 @@ Store `RESEND_API_KEY` in `.env.local` and add it to Vercel's environment variab
 Stay on the free tier until one of these comes up:
 
 - **The 100/day cap fires.** That's the daily ceiling, not the monthly one. A single big event push can saturate it; if you start seeing queued or dropped emails, you're at the wall.
-- **You send more than 3,000 emails in a
+- **You send more than 3,000 emails in a month.** Resend's first paid tier is $20/mo for 50,000 emails, roughly 17× the free quota [1].
+- **You need branded tracking links, longer log retention, or dedicated IPs.** All gated behind Pro ($20/mo) or Scale ($90/mo) [1].
+- **You want richer auth emails.** Move from the SMTP path to the **Send Email Auth Hook** and render React Email templates inside a Supabase Edge Function that calls `resend.emails.send()` directly [19][20].
+
+Don't switch providers just because the daily cap stings once. The SMTP path is the cheapest way to ship, and only the trigger volume of a real campaign justifies leaving Resend.
+
+## References
+
+1. Resend. "Pricing." https://resend.com/pricing. Accessed 2026-07-11.
+2. Brevo. "Pricing Plans." https://www.brevo.com/pricing. Accessed 2026-07-11.
+3. Mailgun. "Mailgun Send Pricing." https://www.mailgun.com/pricing/. Accessed 2026-07-11.
+4. Twilio SendGrid. "SendGrid Email API Pricing." https://www.twilio.com/en-us/products/email-api/pricing. Accessed 2026-07-11.
+5. Amazon Web Services. "Amazon SES Pricing." https://aws.amazon.com/ses/pricing/. Accessed 2026-07-11.
+6. Amazon Web Services. "Sandbox." https://docs.aws.amazon.com/ses/latest/dg/sandbox.html. Accessed 2026-07-11.
+7. Postmark. "Postmark Pricing and Free Trial." https://postmarkapp.com/pricing. Accessed 2026-07-11.
+8. MailerSend. "Pricing." https://www.mailersend.com/pricing. Accessed 2026-07-11.
+9. SMTP2GO. "SMTP2GO Pricing." https://www.smtp2go.com/pricing. Accessed 2026-07-11.
+10. Supabase. "Email Templates." https://supabase.com/docs/guides/auth/auth-email-templates. Accessed 2026-07-11.
+11. Supabase. "Send emails with custom SMTP." https://supabase.com/docs/guides/auth/auth-smtp. Accessed 2026-07-11.
+12. Supabase. "Rate limits." https://supabase.com/docs/guides/auth/rate-limits. Accessed 2026-07-11.
+13. Supabase. "Send Email Hook." https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook. Accessed 2026-07-11.
+14. Resend. "Send emails with Next.js." https://resend.com/docs/send-with-nextjs. Accessed 2026-07-11.
+15. React Email. "Send email using Resend." https://react.email/docs/integrations/resend. Accessed 2026-07-11.
+16. Supabase
