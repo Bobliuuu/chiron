@@ -1,5 +1,5 @@
 // Shared event domain types. Keep EventCategory in sync with the
-// `event_category` enum in supabase/migrations/0001_init.sql.
+// `event_category` enum in supabase/schema.sql.
 
 export const EVENT_CATEGORIES = [
   "food_bank",

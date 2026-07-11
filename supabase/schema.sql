@@ -14,6 +14,8 @@ drop table if exists public.event_registrations;
 drop table if exists public.event_registration_forms;
 drop table if exists public.events;
 drop table if exists public.profiles;
+drop table if exists public.auth_sessions;
+drop table if exists public.app_users;
 drop type if exists event_category;
 drop type if exists ui_mode;
 
@@ -50,6 +52,32 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+-- --- Auth: self-hosted email + password (replaces Supabase Auth) ------------------
+-- Users authenticate against app_users with a salted scrypt hash; a bearer
+-- token in auth_sessions identifies the caller on every request. The server
+-- uses the service-role key, so these tables are reached with RLS bypassed.
+-- On signup the app_users.id becomes the profile id created by onboarding.
+
+create table public.app_users (
+  id             uuid primary key default gen_random_uuid(),
+  email          text        not null unique,
+  -- Format: "<salt-hex>:<scrypt-hash-hex>". No plaintext is ever stored.
+  password_hash  text        not null,
+  created_at     timestamptz not null default now()
+);
+
+-- Match emails case-insensitively (login normalizes to lower-case).
+create unique index app_users_email_lower_idx on public.app_users (lower(email));
+
+create table public.auth_sessions (
+  token       text        primary key,
+  user_id     uuid        not null references public.app_users(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null
+);
+
+create index auth_sessions_user_idx on public.auth_sessions (user_id);
 
 -- --- Events -----------------------------------------------------------------------
 
@@ -97,7 +125,10 @@ create table public.events (
 
   -- Who is hosting / who published
   host_organization         text,
-  created_by                uuid,       -- auth.users id; null = channel-service/legacy
+  -- Organizer contact for outbound voice calls (see vapi/outbound.ts).
+  organizer_name            text,
+  organizer_phone           text,
+  created_by                uuid,       -- app_users id; null = channel-service/legacy
   image_url                 text,       -- public URL in the event-images bucket
 
   created_at                timestamptz not null default now(),
@@ -129,9 +160,13 @@ create trigger events_set_updated_at
 -- --- Profiles ------------------------------------------------------------------
 
 -- One row per community member, created by the onboarding quiz.
--- id = the Supabase auth.users id.
+-- id = the app_users id (see the Auth section above).
 create table public.profiles (
   id                  uuid primary key,
+
+  -- Full name (used for simple voice name-auth) + phone for outbound calls.
+  full_name           text,
+  contact_phone       text,
 
   -- 'quick' = short sentences, fewer choices, icons — derived from the quiz,
   -- user can change it any time (Preferences tab).
@@ -149,9 +184,17 @@ create table public.profiles (
   -- re-derived if the mapping changes, and edited in the Preferences tab.
   quiz_answers        jsonb   not null default '{}'::jsonb,
 
+  -- Learned goals/motivations from voice calls (see packages/shared/src/ontology.ts).
+  voice_ontology      jsonb   not null
+                        default '{"calls":[],"event_goals":[],"motivations":[]}'::jsonb,
+  -- Durable facts the text-chat agent learns (see packages/shared/src/facts.ts).
+  learned_facts       jsonb   not null default '[]'::jsonb,
+
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );
+
+create index profiles_full_name_idx on public.profiles (lower(full_name));
 
 create trigger profiles_set_updated_at
   before update on public.profiles
@@ -213,8 +256,8 @@ create policy "event images service write" on storage.objects
 
 -- --- Row Level Security ---------------------------------------------------------------
 -- The backend talks to Postgres with the service role (bypasses RLS). Anon
--- policies exist only where public reads are safe. Registrations and profiles
--- carry PII: no anon policies at all.
+-- policies exist only where public reads are safe. Profiles, registrations, and
+-- the auth tables carry PII/secrets: no anon policies at all.
 
 alter table public.events enable row level security;
 
@@ -224,3 +267,5 @@ create policy "events read" on public.events
 alter table public.profiles enable row level security;
 alter table public.event_registration_forms enable row level security;
 alter table public.event_registrations enable row level security;
+alter table public.app_users enable row level security;
+alter table public.auth_sessions enable row level security;

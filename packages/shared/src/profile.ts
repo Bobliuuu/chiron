@@ -1,5 +1,5 @@
 // User profile domain types. Keep the ui_mode values in sync with the
-// `ui_mode` enum in supabase/migrations/0001_init.sql.
+// `ui_mode` enum in supabase/schema.sql.
 
 import type { VoiceOntology } from "./ontology";
 import type { LearnedFact } from "./facts";

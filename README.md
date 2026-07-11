@@ -97,8 +97,9 @@ curl -XPOST localhost:8787/api/chat -H 'content-type: application/json' \
 ## Supabase setup (optional)
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) in
-   the SQL editor (creates the `events` table, indexes, and RLS policies).
+2. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor — the
+   single source of truth that creates every table (events, profiles, auth,
+   registrations), indexes, and RLS policies.
 3. Optionally run [`supabase/seed.sql`](supabase/seed.sql) for sample data.
 4. Put the project URL + anon key (and optionally the service-role key) in
    `apps/server/.env`.
@@ -146,7 +147,7 @@ apps/
 packages/
   shared/src/                  # @chiron/shared: channels, chat/agent types, event types
 supabase/
-  migrations/0001_init.sql     # events schema
+  schema.sql                   # full DB schema (single source of truth)
   seed.sql
 docker-compose.yml             # backend (+ optional Caddy TLS for Cloudflare)
 ```

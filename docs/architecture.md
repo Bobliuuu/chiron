@@ -131,8 +131,9 @@ Filtering semantics are kept consistent between backends: the mock store uses a
 pure `applyFilters` function (`data/mock-store.ts`) that mirrors the Supabase
 query built in `data/events.ts`.
 
-Schema lives in `supabase/migrations/0001_init.sql`; the `event_category` enum is
-kept in sync with `EVENT_CATEGORIES` in `packages/shared/src/events.ts`.
+Schema lives in `supabase/schema.sql` (the single source of truth); the
+`event_category` enum is kept in sync with `EVENT_CATEGORIES` in
+`packages/shared/src/events.ts`.
 
 ## The web UI (apps/web)
 
