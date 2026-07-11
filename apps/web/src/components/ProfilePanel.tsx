@@ -41,25 +41,25 @@ export function ProfilePanel({
       role="dialog"
       aria-modal="true"
       aria-label="Your profile"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-12"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/70 p-4 pt-12"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Your profile</h2>
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Your profile</h2>
           <button
             onClick={onClose}
             aria-label="Close profile"
-            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
           >
             ✕
           </button>
         </div>
 
-        <div className="flex gap-1 border-b border-slate-200 px-5 pt-2">
+        <div className="flex gap-1 border-b border-slate-200 px-5 pt-2 dark:border-slate-800">
           <TabButton active={tab === "events"} onClick={() => setTab("events")}>
             My events
           </TabButton>
@@ -101,7 +101,7 @@ function TabButton({
       className={`rounded-t-lg px-3 py-2 text-sm font-medium ${
         active
           ? "border-b-2 border-brand-600 text-brand-700"
-          : "text-slate-500 hover:text-slate-700"
+          : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
       }`}
     >
       {children}
@@ -137,7 +137,7 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
   if (events === null) return <Loading />;
   if (events.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         You haven&apos;t published any events yet. Ask Chiron to create one!
       </p>
     );
@@ -146,7 +146,7 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
   return (
     <ul className="space-y-3">
       {events.map((event) => (
-        <li key={event.id} className="rounded-xl border border-slate-200 p-3">
+        <li key={event.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           {editingId === event.id ? (
             <EventCreateForm
               draft={{}}
@@ -162,17 +162,17 @@ function MyEventsTab({ onEventsChanged }: { onEventsChanged: () => void }) {
           ) : (
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {event.title}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {formatDateTime(event.start_time)}
                   {event.city ? ` · ${event.city}` : ""}
                 </p>
               </div>
               <button
                 onClick={() => setEditingId(event.id)}
-                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand-400 hover:text-brand-700"
+                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-brand-500 dark:hover:text-brand-200"
               >
                 Edit
               </button>
@@ -248,7 +248,7 @@ function JoiningTab() {
   if (registrations === null) return <Loading />;
   if (registrations.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         You&apos;re not signed up for anything yet. Register from an event card
         to see it here.
       </p>
@@ -260,13 +260,13 @@ function JoiningTab() {
       {registrations.map((reg) => {
         const snapshot = reg.event_snapshot;
         return (
-          <li key={reg.id} className="rounded-xl border border-slate-200 p-3">
+          <li key={reg.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {snapshot?.title ?? "Event"}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {snapshot ? formatDateTime(snapshot.start_time) : ""}
                   {snapshot?.city ? ` · ${snapshot.city}` : ""}
                 </p>
@@ -282,7 +282,7 @@ function JoiningTab() {
                     )
                   }
                   aria-label="Registration status"
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 >
                   <option value="interested">Interested</option>
                   <option value="registered">Registered</option>
@@ -340,7 +340,7 @@ function PreferencesTab({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-600 dark:text-slate-300">
         These are your onboarding answers. Changing them updates how Chiron
         talks to you and what it recommends.
       </p>
@@ -351,12 +351,12 @@ function PreferencesTab({
           return (
             <li
               key={q.id}
-              className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-3"
+              className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-3 dark:border-slate-800"
             >
               <div>
-                <p className="text-sm text-slate-800">{q.text}</p>
+                <p className="text-sm text-slate-800 dark:text-slate-100">{q.text}</p>
                 {q.detail && (
-                  <p className="text-xs text-slate-400">{q.detail}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{q.detail}</p>
                 )}
               </div>
               <div className="flex shrink-0 gap-1" role="group" aria-label={q.text}>
@@ -369,7 +369,7 @@ function PreferencesTab({
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                     value
                       ? "bg-brand-600 text-white"
-                      : "border border-slate-300 text-slate-600 hover:border-slate-400"
+                      : "border border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   Yes
@@ -382,8 +382,8 @@ function PreferencesTab({
                   aria-pressed={!value}
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                     !value
-                      ? "bg-slate-700 text-white"
-                      : "border border-slate-300 text-slate-600 hover:border-slate-400"
+                      ? "bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900"
+                      : "border border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   No
@@ -414,5 +414,5 @@ function PreferencesTab({
 }
 
 function Loading() {
-  return <p className="text-sm text-slate-400">Loading…</p>;
+  return <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>;
 }

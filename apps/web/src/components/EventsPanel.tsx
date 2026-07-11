@@ -20,25 +20,25 @@ export function EventsPanel({
   const groups = useMemo(() => groupByDay(events), [events]);
 
   return (
-    <aside className="flex h-full flex-col border-l border-slate-200 bg-white/60">
-      <header className="border-b border-slate-200 px-5 py-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <aside className="flex h-full flex-col border-l border-slate-200 bg-white/60 dark:border-slate-800 dark:bg-slate-900/70">
+      <header className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
           Upcoming events
         </h2>
-        <p className="mt-0.5 text-xs text-slate-400">
+        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
           {loading ? "Loading…" : `${events.length} on the calendar`}
         </p>
       </header>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
         {!loading && events.length === 0 && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             No upcoming events yet. Ask Chiron to create one.
           </p>
         )}
         {groups.map(({ day, items }) => (
           <section key={day}>
-            <h3 className="mb-2 text-xs font-semibold text-slate-400">{day}</h3>
+            <h3 className="mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500">{day}</h3>
             <div className="space-y-3">
               {items.map((e) => (
                 <EventCard key={e.id} event={e} profileId={profileId} />

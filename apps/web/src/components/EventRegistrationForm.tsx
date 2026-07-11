@@ -151,7 +151,7 @@ export function EventRegistrationForm({
 
   if (status === "done") {
     return (
-      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+      <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
         Registration saved for {event.title}.
       </div>
     );
@@ -160,14 +160,14 @@ export function EventRegistrationForm({
   return (
     <form
       onSubmit={submit}
-      className="mt-3 space-y-3 rounded-lg border border-brand-100 bg-brand-50/40 p-3"
+      className="mt-3 space-y-3 rounded-lg border border-brand-100 bg-brand-50/40 p-3 dark:border-brand-900 dark:bg-slate-800/70"
       aria-label={`Register for ${event.title}`}
     >
       <div>
-        <h4 className="text-sm font-semibold text-slate-900">
+        <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
           Register for this event
         </h4>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
           {formatDateTime(event.start_time)}
         </p>
       </div>
@@ -223,7 +223,7 @@ export function EventRegistrationForm({
       </Field>
 
       {schema.fields.length > 0 && (
-        <div className="space-y-3 border-t border-brand-100 pt-3">
+        <div className="space-y-3 border-t border-brand-100 pt-3 dark:border-brand-900">
           {schema.fields.map((field) => (
             <CustomField
               key={field.id}
@@ -238,7 +238,7 @@ export function EventRegistrationForm({
       )}
 
       {schema.stripe?.enabled && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
           Payment collection is marked for this event, but Stripe checkout is not
           wired up yet.
         </div>
@@ -260,7 +260,7 @@ export function EventRegistrationForm({
 }
 
 const inputCls =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 function Field({
   label,
@@ -273,7 +273,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-600">
+      <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
         {label}
         {required && <span className="text-red-500"> *</span>}
       </span>
@@ -293,7 +293,7 @@ function CustomField({
 }) {
   if (field.type === "checkbox") {
     return (
-      <label className="flex items-start gap-2 text-sm text-slate-700">
+      <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
         <input
           type="checkbox"
           checked={value === true}

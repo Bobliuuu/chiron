@@ -60,21 +60,21 @@ export function OnboardingQuiz({ onDone }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="quiz-question"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
     >
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <p className="mb-6 text-sm font-medium text-slate-400">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl dark:bg-slate-900">
+        <p className="mb-6 text-sm font-medium text-slate-400 dark:text-slate-500">
           Question {index + 1} of {total}
         </p>
 
         <h2
           id="quiz-question"
-          className="text-2xl font-semibold leading-snug text-slate-900"
+          className="text-2xl font-semibold leading-snug text-slate-900 dark:text-slate-100"
         >
           {question.text}
         </h2>
         {question.detail && (
-          <p className="mt-2 text-base text-slate-600">{question.detail}</p>
+          <p className="mt-2 text-base text-slate-600 dark:text-slate-300">{question.detail}</p>
         )}
 
         <div className="mt-8 grid grid-cols-2 gap-4">
@@ -88,7 +88,7 @@ export function OnboardingQuiz({ onDone }: Props) {
           <button
             onClick={() => void answer(false)}
             disabled={saving}
-            className="rounded-xl border-2 border-slate-300 bg-white px-6 py-5 text-xl font-semibold text-slate-700 hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:opacity-50"
+            className="rounded-xl border-2 border-slate-300 bg-white px-6 py-5 text-xl font-semibold text-slate-700 hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:focus:ring-slate-700"
           >
             No
           </button>
@@ -103,7 +103,7 @@ export function OnboardingQuiz({ onDone }: Props) {
         <button
           onClick={() => onDone(null)}
           disabled={saving}
-          className="mt-6 text-sm text-slate-400 underline hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="mt-6 text-sm text-slate-400 underline hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:text-slate-500 dark:hover:text-slate-300 dark:focus:ring-slate-700"
         >
           Skip for now
         </button>

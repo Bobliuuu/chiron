@@ -88,7 +88,7 @@ export function Composer({
   }
 
   return (
-    <div className="border-t border-slate-200 bg-white px-4 py-3">
+    <div className="border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-end gap-2">
         <textarea
           value={value}
@@ -101,7 +101,7 @@ export function Composer({
           }}
           rows={1}
           placeholder="Describe what you're looking for, or the event you want to create…"
-          className="max-h-40 flex-1 resize-none rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500"
+          className="max-h-40 flex-1 resize-none rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
           aria-label="Message Chiron"
         />
         <button
@@ -119,7 +119,7 @@ export function Composer({
           className={`flex h-11 w-11 items-center justify-center rounded-xl border text-sm transition ${
             isRecording
               ? "border-brand-600 bg-brand-50 text-brand-700"
-              : "border-slate-300 bg-white text-slate-600 hover:border-brand-400 hover:text-brand-700"
+              : "border-slate-300 bg-white text-slate-600 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-brand-500 dark:hover:text-brand-200"
           } disabled:cursor-not-allowed disabled:opacity-50`}
         >
           <svg
@@ -161,7 +161,7 @@ export function Composer({
           </svg>
         </button>
       </div>
-      <p className="mt-1.5 px-1 text-[11px] text-slate-400">
+      <p className="mt-1.5 px-1 text-[11px] text-slate-400 dark:text-slate-500">
         Press Enter to send · Shift+Enter for a new line
       </p>
     </div>

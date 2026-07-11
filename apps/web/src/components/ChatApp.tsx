@@ -9,6 +9,7 @@ import { OnboardingQuiz } from "@/components/OnboardingQuiz";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { apiUrl, API_URL, CHANNEL, logApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 
 const SUGGESTIONS = [
   "Find all events in Markham for food banks",
@@ -36,6 +37,7 @@ const QUICK_GREETING: UiMessage = {
 
 export function ChatApp() {
   const { authFetch, signOut, user } = useAuth();
+  const { theme, mounted, toggleTheme } = useTheme();
   const [messages, setMessages] = useState<UiMessage[]>([GREETING]);
   const [sending, setSending] = useState(false);
   const [events, setEvents] = useState<PublicEvent[]>([]);
@@ -233,7 +235,7 @@ export function ChatApp() {
   }
 
   return (
-    <div className="grid h-screen grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid h-screen grid-cols-1 bg-slate-50 dark:bg-slate-950 lg:grid-cols-[minmax(0,1fr)_380px]">
       {needsQuiz === true && <OnboardingQuiz onDone={handleQuizDone} />}
       {profileOpen && (
         <ProfilePanel
@@ -249,14 +251,16 @@ export function ChatApp() {
       )}
       {/* Chat column */}
       <div className="flex h-screen flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
               C
             </div>
-          <div>
-              <h1 className="text-sm font-semibold text-slate-900">Chiron</h1>
-              <p className="text-[11px] text-slate-400">
+            <div>
+              <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Chiron
+              </h1>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Community event assistant
               </p>
             </div>
@@ -265,24 +269,42 @@ export function ChatApp() {
             {mode && <ModeBadge mode={mode} />}
             <button
               type="button"
+              onClick={toggleTheme}
+              aria-label={
+                mounted && theme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title={
+                mounted && theme === "dark" ? "Light mode" : "Dark mode"
+              }
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-brand-700 dark:hover:bg-slate-700 dark:hover:text-brand-200"
+            >
+              <ThemeIcon dark={mounted && theme === "dark"} />
+            </button>
+            <button
+              type="button"
               onClick={() => setProfileOpen(true)}
               aria-label="Open your profile"
               title="Your profile"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700 dark:hover:text-brand-200"
             >
               {(user?.email?.[0] ?? "U").toUpperCase()}
             </button>
             <button
               type="button"
               onClick={() => void signOut()}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
             >
               Sign out
             </button>
           </div>
         </header>
 
-        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
+        <div
+          ref={scrollRef}
+          className="flex-1 space-y-4 overflow-y-auto px-4 py-6"
+        >
           <div className="mx-auto w-full max-w-3xl space-y-4">
             {messages.map((m) => (
               <ChatMessageView
@@ -304,7 +326,7 @@ export function ChatApp() {
                       className={
                         uiMode === "quick"
                           ? "rounded-xl border-2 border-slate-300 bg-white px-5 py-3 text-lg text-slate-700 hover:border-brand-400 hover:text-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-300"
-                          : "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-700"
+                          : "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-500 dark:hover:text-brand-200"
                       }
                     >
                       {s}
@@ -336,12 +358,12 @@ export function ChatApp() {
 function ModeBadge({ mode }: { mode: AgentResult["mode"] }) {
   const isLiveLlm = mode.llm === "openai" || mode.llm === "local";
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
       <span
         className={`rounded-full px-2 py-0.5 ${
           isLiveLlm
-            ? "bg-brand-50 text-brand-700"
-            : "bg-slate-100 text-slate-500"
+            ? "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-200"
+            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
         }`}
         title="Which LLM served this response"
       >
@@ -350,13 +372,44 @@ function ModeBadge({ mode }: { mode: AgentResult["mode"] }) {
       <span
         className={`rounded-full px-2 py-0.5 ${
           mode.db === "supabase"
-            ? "bg-emerald-50 text-emerald-700"
-            : "bg-slate-100 text-slate-500"
+            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
         }`}
         title="Which database served this response"
       >
         DB: {mode.db}
       </span>
     </div>
+  );
+}
+
+function ThemeIcon({ dark }: { dark: boolean }) {
+  return dark ? (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" />
+    </svg>
+  ) : (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2.5M12 19.5V22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77" />
+    </svg>
   );
 }

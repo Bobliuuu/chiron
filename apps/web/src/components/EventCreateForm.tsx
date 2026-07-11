@@ -151,7 +151,7 @@ export function EventCreateForm({
 
   if (status === "done") {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
         {isEdit
           ? `✓ Saved changes to “${form.title || "your event"}”.`
           : `✓ Published “${form.title || "your event"}”. It now appears in the upcoming events list and can be recommended to the community.`}
@@ -162,15 +162,15 @@ export function EventCreateForm({
   return (
     <form
       onSubmit={submit}
-      className="space-y-4 rounded-xl border border-brand-100 bg-white p-4 shadow-sm"
+      className="space-y-4 rounded-xl border border-brand-100 bg-white p-4 shadow-sm dark:border-brand-900 dark:bg-slate-900"
       aria-label="Create event"
     >
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
           {isEdit ? "Edit event" : "Review & publish event"}
         </h3>
         {!isEdit && (
-          <span className="text-xs text-slate-400">Prefilled by Chiron</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500">Prefilled by Chiron</span>
         )}
       </div>
 
@@ -246,7 +246,7 @@ export function EventCreateForm({
         </Field>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
         <input
           type="checkbox"
           checked={form.is_online}
@@ -291,7 +291,7 @@ export function EventCreateForm({
       )}
 
       <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
           <input
             type="checkbox"
             checked={form.is_free}
@@ -335,11 +335,11 @@ export function EventCreateForm({
         <input
           type="file"
           accept="image/*"
-          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+          className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-950 dark:file:text-brand-200"
           onChange={(e) => void uploadImage(e.target.files?.[0])}
         />
         {imageStatus === "uploading" && (
-          <p className="mt-1 text-xs text-slate-400">Uploading…</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Uploading…</p>
         )}
         {imageStatus === "error" && (
           <p className="mt-1 text-xs text-red-600">
@@ -404,7 +404,7 @@ export function EventCreateForm({
 }
 
 const inputCls =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 function Field({
   label,
@@ -421,10 +421,10 @@ function Field({
 }) {
   return (
     <label className={`block ${className ?? ""}`}>
-      <span className="mb-1 block text-xs font-medium text-slate-600">
+      <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
         {label}
         {required && <span className="text-red-500"> *</span>}
-        {hint && <span className="ml-1 font-normal text-slate-400">{hint}</span>}
+        {hint && <span className="ml-1 font-normal text-slate-400 dark:text-slate-500">{hint}</span>}
       </span>
       {children}
     </label>

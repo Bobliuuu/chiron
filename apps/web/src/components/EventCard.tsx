@@ -30,7 +30,7 @@ export function EventCard({
   }
 
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       {event.image_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -40,56 +40,56 @@ export function EventCard({
         />
       )}
       <div className="mb-1 flex items-center gap-2">
-        <span className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+        <span className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-200">
           {CATEGORY_LABELS[event.category] ?? event.category}
         </span>
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
             event.is_free
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-amber-50 text-amber-700"
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+              : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200"
           }`}
         >
           {event.is_free ? "Free" : event.cost_note || "Paid"}
         </span>
       </div>
 
-      <h3 className="text-base font-semibold leading-snug text-slate-900">
+      <h3 className="text-base font-semibold leading-snug text-slate-900 dark:text-slate-100">
         {event.title}
       </h3>
-      <p className="mt-1 text-sm text-slate-600">{event.summary}</p>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{event.summary}</p>
 
-      <dl className="mt-3 space-y-1 text-sm text-slate-700">
+      <dl className="mt-3 space-y-1 text-sm text-slate-700 dark:text-slate-200">
         <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-slate-400">When</dt>
+          <dt className="w-16 shrink-0 text-slate-400 dark:text-slate-500">When</dt>
           <dd>{formatDateTime(event.start_time)}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-slate-400">Where</dt>
+          <dt className="w-16 shrink-0 text-slate-400 dark:text-slate-500">Where</dt>
           <dd>{where}</dd>
         </div>
         {event.audience && (
           <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-slate-400">For</dt>
+            <dt className="w-16 shrink-0 text-slate-400 dark:text-slate-500">For</dt>
             <dd>{event.audience}</dd>
           </div>
         )}
         {event.host_organization && (
           <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-slate-400">Host</dt>
+            <dt className="w-16 shrink-0 text-slate-400 dark:text-slate-500">Host</dt>
             <dd>{event.host_organization}</dd>
           </div>
         )}
         {event.accessibility.length > 0 && (
           <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-slate-400">Access</dt>
+            <dt className="w-16 shrink-0 text-slate-400 dark:text-slate-500">Access</dt>
             <dd>{event.accessibility.join(", ")}</dd>
           </div>
         )}
       </dl>
 
       {(event.registration_url || event.registration_instructions) && (
-        <div className="mt-3 border-t border-slate-100 pt-3 text-sm">
+        <div className="mt-3 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
           {event.registration_url ? (
             <a
               href={event.registration_url}
@@ -100,14 +100,14 @@ export function EventCard({
               External signup →
             </a>
           ) : (
-            <span className="text-slate-600">
+            <span className="text-slate-600 dark:text-slate-300">
               {event.registration_instructions}
             </span>
           )}
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+      <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
         <button
           type="button"
           onClick={() => setShowRegistration((v) => !v)}
@@ -146,7 +146,7 @@ function QuickEventCard({
   const [showRegistration, setShowRegistration] = useState(false);
 
   return (
-    <article className="overflow-hidden rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+    <article className="overflow-hidden rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       {event.image_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -155,14 +155,14 @@ function QuickEventCard({
           className="-mx-5 -mt-5 mb-4 h-40 w-[calc(100%+2.5rem)] max-w-none object-cover"
         />
       )}
-      <h3 className="text-xl font-semibold leading-snug text-slate-900">
+      <h3 className="text-xl font-semibold leading-snug text-slate-900 dark:text-slate-100">
         {event.title}
       </h3>
-      <p className="mt-2 text-lg leading-relaxed text-slate-700">
+      <p className="mt-2 text-lg leading-relaxed text-slate-700 dark:text-slate-300">
         {event.summary}
       </p>
 
-      <ul className="mt-4 space-y-2 text-lg text-slate-800">
+      <ul className="mt-4 space-y-2 text-lg text-slate-800 dark:text-slate-200">
         <li className="flex items-start gap-3">
           <span aria-hidden="true">📅</span>
           <span>{formatDateTime(event.start_time)}</span>
@@ -197,7 +197,7 @@ function QuickEventCard({
         {showRegistration ? "Hide form" : "Register"}
       </button>
       {!profileId && (
-        <p className="mt-2 text-base text-slate-500">
+        <p className="mt-2 text-base text-slate-500 dark:text-slate-400">
           Finish the quick profile first.
         </p>
       )}
