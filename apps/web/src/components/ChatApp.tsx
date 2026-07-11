@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth";
 const SUGGESTIONS = [
   "Find all events in Markham for food banks",
   "Recommend me some events",
-  "Create an event for a charity fundraiser on June 20th at Cherry St",
+  "Create a charity fundraiser next Saturday at Cherry St",
 ];
 
 const QUICK_SUGGESTIONS = [

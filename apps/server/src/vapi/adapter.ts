@@ -17,7 +17,8 @@ interface OpenAiMessage {
 
 /**
  * VAPI Custom LLM ingress. Accepts an OpenAI-compatible chat completion
- * request, runs the Chiron voice agent, and returns a non-streaming response.
+ * request, runs the Chiron voice agent, and returns either a JSON completion
+ * or an SSE stream (VAPI defaults to stream: true).
  */
 export async function handleChatCompletions(c: Context): Promise<Response> {
   let body: OpenAiChatRequest;
@@ -27,21 +28,12 @@ export async function handleChatCompletions(c: Context): Promise<Response> {
     return c.json({ error: "Invalid JSON body." }, 400);
   }
 
-  if (body.stream) {
-    return c.json(
-      {
-        error:
-          "Streaming is not supported yet. Configure the assistant for non-streaming responses.",
-      },
-      501,
-    );
-  }
-
   const messages = toChironMessages(body.messages);
   if (messages.length === 0) {
     return c.json({ error: "No user or assistant messages provided." }, 400);
   }
 
+  let content: string;
   try {
     const auth = await resolveVoiceAuth(messages);
     const result = await runAgent({
@@ -49,7 +41,7 @@ export async function handleChatCompletions(c: Context): Promise<Response> {
       messages,
       profile: auth.profile,
     });
-    return c.json(toOpenAiCompletion(result.message, body.model));
+    content = result.message;
   } catch (err) {
     console.error("[/v1/chat/completions] agent error:", err);
     return c.json(
@@ -62,6 +54,11 @@ export async function handleChatCompletions(c: Context): Promise<Response> {
       500,
     );
   }
+
+  if (body.stream) {
+    return streamCompletion(content, body.model);
+  }
+  return c.json(toOpenAiCompletion(content, body.model));
 }
 
 /** Keep user/assistant turns; drop system/tool messages (Chiron owns the system prompt). */
@@ -98,4 +95,62 @@ function toOpenAiCompletion(content: string, model?: string) {
     ],
     usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
   };
+}
+
+/**
+ * OpenAI-compatible SSE stream. We run the agent to completion first, then
+ * emit the reply as chunk(s) — VAPI requires stream format by default even
+ * when the Custom LLM isn't token-streaming.
+ */
+function streamCompletion(content: string, model?: string): Response {
+  const id = `chatcmpl-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+  const created = Math.floor(Date.now() / 1000);
+  const modelName = model ?? "chiron-voice";
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (payload: unknown) => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
+        );
+      };
+
+      // Role + first content chunk
+      send({
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model: modelName,
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content },
+            finish_reason: null,
+          },
+        ],
+      });
+
+      // Terminal chunk
+      send({
+        id,
+        object: "chat.completion.chunk",
+        created,
+        model: modelName,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      });
+
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

@@ -283,7 +283,7 @@ export async function executeTool(
     case "draft_event":
       return runDraft(args);
     case "create_event":
-      return runCreate(args);
+      return runCreate(args, ctx);
     case "call_event_organizer":
       return runCallOrganizer(args);
     default:
@@ -488,7 +488,10 @@ async function runShowEvents(args: Record<string, unknown>): Promise<ToolOutcome
   };
 }
 
-async function runCreate(args: Record<string, unknown>): Promise<ToolOutcome> {
+async function runCreate(
+  args: Record<string, unknown>,
+  ctx: ToolContext = {},
+): Promise<ToolOutcome> {
   if (args.confirmed !== true) {
     return {
       forModel: JSON.stringify({
@@ -512,7 +515,12 @@ async function runCreate(args: Record<string, unknown>): Promise<ToolOutcome> {
     // Same tagging pipeline as the web publish path, so voice/WhatsApp-created
     // events are equally discoverable by tag.
     const { tags, internal_tags } = await tagEvent(built.input);
-    const event = await createEvent({ ...built.input, tags, internal_tags });
+    const event = await createEvent({
+      ...built.input,
+      tags,
+      internal_tags,
+      created_by: ctx.profileId ?? null,
+    });
     return {
       forModel: JSON.stringify({
         created: true,

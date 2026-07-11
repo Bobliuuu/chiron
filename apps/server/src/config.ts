@@ -86,7 +86,10 @@ export const env = {
 
   // --- Demo: manual outbound user check-in ---
   // Hardcoded profile to call when triggering the demo button.
-  demoCallProfileId: process.env.DEMO_CALL_PROFILE_ID ?? "usr_maria_chen",
+  // Seed UUID for Maria Chen (see supabase/seed.sql); mock id usr_maria_chen
+  // only works when the DB is in-memory.
+  demoCallProfileId:
+    process.env.DEMO_CALL_PROFILE_ID ?? "11111111-1111-1111-1111-111111111101",
   // Demo always dials this number (E.164). Override via DEMO_CALL_USER_PHONE.
   demoCallUserPhone: process.env.DEMO_CALL_USER_PHONE || "+16479681128",
 };

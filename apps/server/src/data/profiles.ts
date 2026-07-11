@@ -102,9 +102,16 @@ export async function upsertProfile(input: ProfileInput): Promise<Profile> {
   return data as Profile;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getProfile(id: string): Promise<Profile | null> {
   const db = getSupabaseAdmin();
   if (!db) return mockProfiles.get(id) ?? null;
+
+  // Supabase profiles.id is uuid — mock-style ids like "usr_maria_chen" are
+  // not queryable there; treat them as a miss so callers can fall back.
+  if (!UUID_RE.test(id)) return null;
 
   const { data, error } = await db
     .from(TABLE)

@@ -61,9 +61,15 @@ export async function placeOutboundCall(
       name: input.customerName,
       numberE164CheckEnabled: true,
     },
+    // Always include provider when overriding model — VAPI rejects a bare
+    // `{ messages }` object (and Custom LLM inbound assistants aren't valid
+    // for outbound telephony anyway).
     assistantOverrides: {
       firstMessage: input.firstMessage,
       model: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+        temperature: 0.3,
         messages: [{ role: "system", content: input.systemPrompt }],
       },
       maxDurationSeconds: input.maxDurationSeconds ?? 300,

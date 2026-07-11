@@ -19,7 +19,13 @@ import {
 import { env, currentMode as mode } from "../config";
 import { logVerbose } from "../log";
 import { runAgent } from "../agent/orchestrator";
-import { createEvent, getEvent, upcomingEvents } from "../data/events";
+import {
+  createEvent,
+  eventsByCreator,
+  getEvent,
+  upcomingEvents,
+  updateEvent,
+} from "../data/events";
 import {
   defaultRegistrationFormSchema,
   getEventRegistrationForm,
@@ -183,15 +189,30 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
         : undefined;
 
     try {
-      let demoProfile = await getProfile(env.demoCallProfileId);
+      // Resolve or create the demo user. Seed UUID works on Supabase; mock id
+      // usr_maria_chen only exists in the in-memory store.
+      let demoProfile =
+        (await getProfile(env.demoCallProfileId)) ??
+        (await findProfileByFullName("Maria Chen"));
       if (!demoProfile) {
-        demoProfile = await findProfileByFullName("Maria Chen");
-      }
-      if (!demoProfile) {
-        return c.json(
-          { error: `Demo profile not found: ${env.demoCallProfileId}` },
-          404,
-        );
+        demoProfile = await upsertProfile({
+          id: env.demoCallProfileId.startsWith("usr_")
+            ? "11111111-1111-1111-1111-111111111101"
+            : env.demoCallProfileId,
+          full_name: "Maria Chen",
+          contact_phone: env.demoCallUserPhone || "+16479681128",
+          ui_mode: "quick",
+          accessibility_needs: ["wheelchair", "plain_language"],
+          preferred_tags: ["food", "families", "free"],
+          city: "Markham",
+          free_only: true,
+          quiz_answers: {
+            short_info: true,
+            wheelchair: true,
+            free_only: true,
+            family: true,
+          },
+        });
       }
 
       // Demo button always dials the configured demo number — never the
@@ -342,11 +363,66 @@ export function createApp(): Hono<{ Variables: AuthVariables }> {
       // ranking tags before the row is written, so the event is immediately
       // discoverable by tag.
       const { tags, internal_tags } = await tagEvent(parsed.input);
-      const event = await createEvent({ ...parsed.input, tags, internal_tags });
+      const event = await createEvent({
+        ...parsed.input,
+        tags,
+        internal_tags,
+        created_by: c.get("authUser").id,
+      });
       return c.json({ event: toPublicEvent(event) }, 201);
     } catch (err) {
       console.error("[/api/events POST] error:", err);
       return c.json({ error: "Failed to create event." }, 500);
+    }
+  });
+
+  // GET /api/my/events -> events published by the signed-in user.
+  app.get("/api/my/events", requireAuth, async (c) => {
+    try {
+      const events = await eventsByCreator(c.get("authUser").id);
+      return c.json({ events: events.map(toPublicEvent) });
+    } catch (err) {
+      console.error("[/api/my/events GET] error:", err);
+      return c.json({ error: "Failed to load your events." }, 500);
+    }
+  });
+
+  // PATCH /api/events/:id -> update an event the signed-in user owns.
+  app.patch("/api/events/:id", requireAuth, async (c) => {
+    const eventId = c.req.param("id");
+    if (!eventId || !isUuid(eventId)) {
+      return c.json({ error: "A valid event id is required." }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body." }, 400);
+    }
+
+    const parsed = validateEvent(body);
+    if ("error" in parsed) {
+      return c.json({ error: parsed.error }, 400);
+    }
+
+    try {
+      const existing = await getEvent(eventId);
+      if (!existing) return c.json({ error: "Event not found." }, 404);
+      if (existing.created_by !== c.get("authUser").id) {
+        return c.json({ error: "You can only edit events you published." }, 403);
+      }
+
+      const { tags, internal_tags } = await tagEvent(parsed.input);
+      const event = await updateEvent(eventId, {
+        ...parsed.input,
+        tags,
+        internal_tags,
+      });
+      return c.json({ event: toPublicEvent(event) });
+    } catch (err) {
+      console.error("[/api/events PATCH] error:", err);
+      return c.json({ error: "Failed to update event." }, 500);
     }
   });
 
